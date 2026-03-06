@@ -53,7 +53,7 @@ func main() {
 	}
 
 	// Запускаем миграции перед стартом приложения
-	if err := runMigrations(cfg.DSN()); err != nil {
+	if err := runMigrations(cfg.MigrationDSN()); err != nil {
 		log.Fatalf("Ошибка миграций: %v", err)
 	}
 	log.Println("Миграции успешно применены")

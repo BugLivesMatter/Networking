@@ -47,3 +47,15 @@ func getEnv(key, defaultVal string) string {
 	}
 	return defaultVal
 }
+
+// MigrationDSN возвращает строку подключения в формате URL для golang-migrate
+// Формат: postgres://user:password@host:port/dbname?sslmode=disable
+func (c *Config) MigrationDSN() string {
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+		c.DBUser,
+		c.DBPassword,
+		c.DBHost,
+		c.DBPort,
+		c.DBName,
+	)
+}
