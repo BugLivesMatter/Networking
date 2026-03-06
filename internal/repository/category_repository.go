@@ -30,7 +30,7 @@ func (r *categoryRepository) Create(ctx context.Context, category *domain.Catego
 
 func (r *categoryRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Category, error) {
 	var category domain.Category
-	err := r.db.WithContext(ctx).Where("id = ?", id).First(&category).Error
+	err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&category).Error
 	if err != nil {
 		return nil, err
 	}
@@ -40,12 +40,19 @@ func (r *categoryRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 func (r *categoryRepository) List(ctx context.Context, offset, limit int) ([]domain.Category, int64, error) {
 	var categories []domain.Category
 	var total int64
-	if err := r.db.WithContext(ctx).Model(&domain.Category{}).Count(&total).Error; err != nil {
+	// Создаём базовый запрос с фильтром по НЕ удалённым записям
+	query := r.db.WithContext(ctx).Model(&domain.Category{}).Where("deleted_at IS NULL")
+
+	// Считаем общее количество НЕ удалённых записей
+	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	if err := r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&categories).Error; err != nil {
+
+	// Получаем записи с пагинацией, только НЕ удалённые
+	if err := query.Offset(offset).Limit(limit).Find(&categories).Error; err != nil {
 		return nil, 0, err
 	}
+
 	return categories, total, nil
 }
 
