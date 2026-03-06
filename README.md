@@ -1,6 +1,79 @@
 # Лабораторная работа №2
 ## Тема: Проектирование и реализация RESTful API
 
+### Описание проекта
+
+RESTful API магазина косметики **«Блеск»**. Две сущности: **Категория** (рубрики каталога) и **Товар** (косметика) со связью один ко многим: у каждого товара одна категория. Реализовано на **Go** (Gin), СУБД **PostgreSQL 16**, ORM **GORM**. CRUD по `/categories` и `/products`, мягкое удаление (Soft Delete), пагинация. Слои: Handler → Service → Repository → БД. Конфигурация через `.env`. Развёртывание: Docker Compose.
+
+Репозиторий: [https://github.com/BugLivesMatter/lab_2](https://github.com/BugLivesMatter/lab_2).
+
+### Запуск
+
+1. Скопируйте `.env.example` в `.env` и задайте переменные (пароль БД и т.д.). Файл `.env` не коммитится в репозиторий.
+2. Запуск всех сервисов (БД и приложение):
+
+```bash
+docker-compose up --build
+```
+
+API доступен по адресу: `http://localhost:4200`. База данных — на порту `5432`.
+
+### Переменные окружения
+
+Пример см. в файле [.env.example](.env.example):
+
+| Переменная     | Описание           | Пример                    |
+|----------------|--------------------|---------------------------|
+| `DB_USER`      | Пользователь БД    | `student`                 |
+| `DB_PASSWORD`  | Пароль БД          | (задать в `.env`)         |
+| `DB_NAME`      | Имя базы           | `wp_labs`                 |
+| `DB_HOST`      | Хост БД (в Docker) | `postgres`                |
+| `DB_PORT`      | Порт БД            | `5432`                    |
+| `PORT`         | Порт приложения    | `4200`                    |
+
+Для локального запуска без Docker задайте `DB_HOST=localhost` и создайте БД вручную или через контейнер только с PostgreSQL.
+
+### API
+
+Базовый URL: `http://localhost:4200`.
+
+**Категории (связь 1:N — у одной категории много товаров)**
+
+| Метод   | URI                | Описание              | Успешный ответ   |
+|--------|--------------------|------------------------|------------------|
+| GET    | `/categories`      | Список категорий (пагинация) | 200 OK           |
+| GET    | `/categories/:id`  | Одна категория по ID   | 200 OK           |
+| POST   | `/categories`      | Создать категорию      | 201 Created      |
+| PUT    | `/categories/:id`  | Полное обновление      | 200 OK           |
+| PATCH  | `/categories/:id`  | Частичное обновление   | 200 OK           |
+| DELETE | `/categories/:id`  | Мягкое удаление (409, если есть товары) | 204 No Content   |
+
+Поля категории: `name` (обязательно), `description`, `status` — `active` или `hidden`.
+
+**Товары (привязаны к категории через `categoryId`)**
+
+| Метод   | URI               | Описание                    | Успешный ответ   |
+|--------|--------------------|-----------------------------|------------------|
+| GET    | `/products`       | Список товаров (пагинация, опционально `?category_id=uuid`) | 200 OK           |
+| GET    | `/products/:id`   | Один товар по ID            | 200 OK           |
+| POST   | `/products`       | Создать товар               | 201 Created      |
+| PUT    | `/products/:id`   | Полное обновление           | 200 OK           |
+| PATCH  | `/products/:id`   | Частичное обновление        | 200 OK           |
+| DELETE | `/products/:id`   | Мягкое удаление             | 204 No Content   |
+
+Поля товара: `categoryId` (обязательно, UUID существующей категории), `name` (обязательно), `description`, `price` (число ≥ 0), `status` — `available`, `out_of_stock` или `discontinued`. В ответе товара возвращаются `categoryId` и `categoryName` (если загружена категория).
+
+**Пагинация (GET /categories и GET /products):**
+
+- Query: `page` (по умолчанию `1`), `limit` (по умолчанию `10`, макс. `100`).
+- Ответ: `data` — массив записей, `meta`: `total`, `page`, `limit`, `totalPages`.
+
+### Миграции
+
+Схема БД создаётся при старте приложения (GORM AutoMigrate). Таблицы `categories` и `products` создаются при первом запуске. Отдельная команда не требуется.
+
+---
+
 ### Цель работы
 1.  Изучить архитектурный стиль REST и принципы построения веб-сервисов.
 2.  Освоить работу с HTTP-методами (GET, POST, PUT, PATCH, DELETE) и кодами состояний.
@@ -247,5 +320,6 @@ curl -X DELETE http://localhost:4200/items/550e8400-e29b-41d4-a716-446655440000
 -   Python (Django): [Django Migrations](https://docs.djangoproject.com/en/stable/topics/migrations/).
 -   Python (FastAPI/Flask): [Alembic](https://alembic.sqlalchemy.org/en/latest/).
 -   Go (Gin/Fiber): [golang-migrate](https://github.com/golang-migrate/migrate) или [GORM Migrate](https://gorm.io/docs/migration.html).
--   PHP (Laravel): [Laravel Migrations](https://laravel.com/docs/migrations).#   l a b _ 2  
+-   PHP (Laravel): [Laravel Migrations](https://laravel.com/docs/migrations).#   l a b _ 2 
+ 
  
