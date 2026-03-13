@@ -30,6 +30,16 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-student_secure_password}
       DB_NAME: ${DB_NAME:-wp_labs}
       PORT: 4200
+      # JWT конфигурация
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
+      
+      # OAuth2 Yandex
+      YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID}
+      YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET}
+      YANDEX_CALLBACK_URL: ${YANDEX_CALLBACK_URL}
     ports:
       - "4200:4200"
     depends_on:

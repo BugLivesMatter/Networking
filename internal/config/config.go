@@ -15,6 +15,17 @@ type Config struct {
 	DBPassword string
 	DBName     string
 	Port       int
+
+	// JWT конфигурация
+	JWTAccessSecret      string
+	JWTRefreshSecret     string
+	JWTAccessExpiration  string
+	JWTRefreshExpiration string
+
+	// OAuth2 Yandex
+	YandexClientID     string
+	YandexClientSecret string
+	YandexCallbackURL  string
 }
 
 func Load() (*Config, error) {
@@ -30,6 +41,17 @@ func Load() (*Config, error) {
 		DBPassword: getEnv("DB_PASSWORD", ""),
 		DBName:     getEnv("DB_NAME", "wp_labs"),
 		Port:       port,
+
+		// JWT
+		JWTAccessSecret:      getEnv("JWT_ACCESS_SECRET", ""),
+		JWTRefreshSecret:     getEnv("JWT_REFRESH_SECRET", ""),
+		JWTAccessExpiration:  getEnv("JWT_ACCESS_EXPIRATION", "15m"),
+		JWTRefreshExpiration: getEnv("JWT_REFRESH_EXPIRATION", "7d"),
+
+		// OAuth2
+		YandexClientID:     getEnv("YANDEX_CLIENT_ID", ""),
+		YandexClientSecret: getEnv("YANDEX_CLIENT_SECRET", ""),
+		YandexCallbackURL:  getEnv("YANDEX_CALLBACK_URL", ""),
 	}
 	return cfg, nil
 }
