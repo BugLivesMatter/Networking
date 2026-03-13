@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -19,6 +20,7 @@ type UserRepository interface {
 	GetByVKID(ctx context.Context, vkID string) (*domain.User, error)
 	Update(ctx context.Context, user *domain.User) error
 	Delete(ctx context.Context, id uuid.UUID) error
+	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash, salt string) error
 }
 
 // userRepositoryImpl реализует интерфейс UserRepository
@@ -96,4 +98,16 @@ func (r *userRepositoryImpl) Update(ctx context.Context, user *domain.User) erro
 // Delete мягко удаляет пользователя (soft delete)
 func (r *userRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&domain.User{}, id).Error
+}
+
+// UpdatePassword обновляет пароль пользователя
+func (r *userRepositoryImpl) UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash, salt string) error {
+	return r.db.WithContext(ctx).
+		Model(&domain.User{}).
+		Where("id = ?", userID).
+		Updates(map[string]interface{}{
+			"password_hash": passwordHash,
+			"salt":          salt,
+			"updated_at":    time.Now(),
+		}).Error
 }
