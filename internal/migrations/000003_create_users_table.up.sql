@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
     phone VARCHAR(20) UNIQUE,
     password_hash TEXT NOT NULL,
     salt TEXT NOT NULL,
-    yandex_id VARCHAR(255) UNIQUE,
+    yandex_id VARCHAR(255),
     vk_id VARCHAR(255) UNIQUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),

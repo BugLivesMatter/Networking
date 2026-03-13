@@ -37,8 +37,8 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 
 // ToResponse возвращает безопасную версию пользователя для ответов API
 // Исключает чувствительные поля: пароль, соль, ID провайдеров
-func (u *User) ToResponse() UserResponse {
-	return UserResponse{
+func (u *User) ToResponse() *UserResponse {
+	return &UserResponse{
 		ID:        u.ID,
 		Email:     u.Email,
 		Phone:     u.Phone,
