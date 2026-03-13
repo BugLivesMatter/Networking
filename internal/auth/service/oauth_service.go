@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,7 +22,7 @@ import (
 // OAuthService определяет интерфейс для OAuth авторизации
 type OAuthService interface {
 	GetAuthorizationURL(provider string) (string, string, error)
-	HandleCallback(ctx context.Context, provider, code, state string) (*domain.User, *TokensResponse, error)
+	HandleCallback(ctx context.Context, provider, code, state string) (*domain.User, *dto.TokensResponse, error)
 }
 
 // oauthServiceImpl реализует интерфейс OAuthService
@@ -80,7 +82,7 @@ func (s *oauthServiceImpl) getYandexAuthURL() (string, string, error) {
 }
 
 // HandleCallback обрабатывает callback от OAuth провайдера
-func (s *oauthServiceImpl) HandleCallback(ctx context.Context, provider, code, state string) (*domain.User, *TokensResponse, error) {
+func (s *oauthServiceImpl) HandleCallback(ctx context.Context, provider, code, state string) (*domain.User, *dto.TokensResponse, error) {
 	switch provider {
 	case "yandex":
 		return s.handleYandexCallback(ctx, code, state)
@@ -90,7 +92,7 @@ func (s *oauthServiceImpl) HandleCallback(ctx context.Context, provider, code, s
 }
 
 // handleYandexCallback обрабатывает callback от Яндекса
-func (s *oauthServiceImpl) handleYandexCallback(ctx context.Context, code, state string) (*domain.User, *TokensResponse, error) {
+func (s *oauthServiceImpl) handleYandexCallback(ctx context.Context, code, state string) (*domain.User, *dto.TokensResponse, error) {
 	// 1. Обмениваем code на access_token
 	tokenResp, err := s.getYandexToken(code)
 	if err != nil {
@@ -154,7 +156,7 @@ func (s *oauthServiceImpl) handleYandexCallback(ctx context.Context, code, state
 		return nil, nil, fmt.Errorf("failed to save refresh token: %w", err)
 	}
 
-	tokens := &TokensResponse{
+	tokens := &dto.TokensResponse{
 		AccessToken:      accessToken,
 		RefreshToken:     refreshToken,
 		AccessExpiresIn:  accessExpiry,
@@ -234,4 +236,10 @@ func generateOAuthState() string {
 	}
 	jsonData, _ := json.Marshal(data)
 	return base64.StdEncoding.EncodeToString(jsonData)
+}
+
+// hashToken хеширует токен для безопасного хранения в БД
+func hashToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
 }
