@@ -1,3 +1,11 @@
+// @title Lab 2-4 REST API
+// @version 1.0
+// @description REST API для управления категориями и продуктами с JWT и OAuth2 авторизацией.
+// @host localhost:4200
+// @BasePath /
+// @securityDefinitions.apikey CookieAuth
+// @in cookie
+// @name access_token
 package main
 
 import (
@@ -7,7 +15,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/lab2/rest-api/internal/config"
+	_ "github.com/lab2/rest-api/docs"
 
 	//"github.com/lab2/rest-api/internal/domain"
 	"github.com/lab2/rest-api/internal/handler"
@@ -134,6 +145,9 @@ func main() {
 
 	r := gin.New()
 	r.Use(gin.Recovery(), middleware.Recovery())
+	if cfg.AppEnv != "production" {
+		r.GET("/api/docs/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+	}
 
 	// ========== PUBLIC ROUTES (без авторизации) ==========
 	publicAuth := r.Group("/auth")

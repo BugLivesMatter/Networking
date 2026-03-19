@@ -21,6 +21,18 @@ func NewPasswordHandler(authService service.AuthService) *PasswordHandler {
 }
 
 // ForgotPassword обрабатывает POST /auth/forgot-password
+// @Summary Запрос сброса пароля
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body dto.ForgotPasswordRequest true "Email пользователя"
+// @Success 200 {object} dto.ForgotPasswordResponse "сообщение о выполнении запроса"
+// @Failure 400 {object} AuthErrorResponse
+// @Failure 401 {object} AuthErrorResponse
+// @Failure 403 {object} AuthErrorResponse
+// @Failure 404 {object} AuthErrorResponse
+// @Failure 500 {object} AuthErrorResponse
+// @Router /auth/forgot-password [post]
 func (h *PasswordHandler) ForgotPassword(c *gin.Context) {
 	var req dto.ForgotPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -33,12 +45,24 @@ func (h *PasswordHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "если пользователь существует, письмо для сброса пароля отправлено",
+	c.JSON(http.StatusOK, dto.ForgotPasswordResponse{
+		Message: "если пользователь существует, письмо для сброса пароля отправлено",
 	})
 }
 
 // ResetPassword обрабатывает POST /auth/reset-password
+// @Summary Установка нового пароля по токену
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body dto.ResetPasswordRequest true "Токен и новый пароль"
+// @Success 200 {object} dto.ResetPasswordResponse "пароль успешно изменён"
+// @Failure 400 {object} AuthErrorResponse
+// @Failure 401 {object} AuthErrorResponse
+// @Failure 403 {object} AuthErrorResponse
+// @Failure 404 {object} AuthErrorResponse
+// @Failure 500 {object} AuthErrorResponse
+// @Router /auth/reset-password [post]
 func (h *PasswordHandler) ResetPassword(c *gin.Context) {
 	var req dto.ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -51,7 +75,7 @@ func (h *PasswordHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "пароль успешно изменён",
+	c.JSON(http.StatusOK, dto.ResetPasswordResponse{
+		Message: "пароль успешно изменён",
 	})
 }

@@ -32,7 +32,12 @@ func NewAuthHandler(authService service.AuthService) *AuthHandler {
 // @Accept json
 // @Produce json
 // @Param request body dto.RegisterRequest true "Данные для регистрации"
-// @Success 201 {object} map[string]interface{}
+// @Success 201 {object} dto.RegisterResponse "успешная регистрация"
+// @Failure 400 {object} AuthErrorResponse
+// @Failure 401 {object} AuthErrorResponse
+// @Failure 403 {object} AuthErrorResponse
+// @Failure 404 {object} AuthErrorResponse
+// @Failure 500 {object} AuthErrorResponse
 // @Router /auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req dto.RegisterRequest
@@ -51,9 +56,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "пользователь успешно зарегистрирован",
-		"userId":  user.ID,
+	c.JSON(http.StatusCreated, dto.RegisterResponse{
+		Message: "пользователь успешно зарегистрирован",
+		UserID:  user.ID,
 	})
 }
 
@@ -63,7 +68,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body dto.LoginRequest true "Данные для входа"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} dto.LoginResponse "успешный вход (JWT в HttpOnly cookies)"
+// @Failure 400 {object} AuthErrorResponse
+// @Failure 401 {object} AuthErrorResponse
+// @Failure 403 {object} AuthErrorResponse
+// @Failure 404 {object} AuthErrorResponse
+// @Failure 500 {object} AuthErrorResponse
 // @Router /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dto.LoginRequest
@@ -101,10 +111,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		true,
 	)
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":          "успешный вход",
-		"accessExpiresIn":  tokens.AccessExpiresIn.String(),
-		"refreshExpiresIn": tokens.RefreshExpiresIn.String(),
+	c.JSON(http.StatusOK, dto.LoginResponse{
+		Message:          "успешный вход",
+		AccessExpiresIn:  tokens.AccessExpiresIn.String(),
+		RefreshExpiresIn: tokens.RefreshExpiresIn.String(),
 	})
 }
 
@@ -112,7 +122,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // @Summary Обновление токенов
 // @Tags auth
 // @Produce json
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} dto.RefreshResponse "успешное обновление (JWT в HttpOnly cookies)"
+// @Failure 400 {object} AuthErrorResponse
+// @Failure 401 {object} AuthErrorResponse
+// @Failure 403 {object} AuthErrorResponse
+// @Failure 404 {object} AuthErrorResponse
+// @Failure 500 {object} AuthErrorResponse
 // @Router /auth/refresh [post]
 func (h *AuthHandler) Refresh(c *gin.Context) {
 	// Получаем refresh токен из cookies
@@ -151,10 +166,10 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		true,
 	)
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":          "токены обновлены",
-		"accessExpiresIn":  tokens.AccessExpiresIn.String(),
-		"refreshExpiresIn": tokens.RefreshExpiresIn.String(),
+	c.JSON(http.StatusOK, dto.RefreshResponse{
+		Message:          "токены обновлены",
+		AccessExpiresIn:  tokens.AccessExpiresIn.String(),
+		RefreshExpiresIn: tokens.RefreshExpiresIn.String(),
 	})
 }
 
@@ -162,7 +177,13 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 // @Summary Получение данных текущего пользователя
 // @Tags auth
 // @Produce json
-// @Success 200 {object} domain.UserResponse
+// @Security CookieAuth
+// @Success 200 {object} domain.UserResponse "данные текущего пользователя"
+// @Failure 400 {object} AuthErrorResponse
+// @Failure 401 {object} AuthErrorResponse
+// @Failure 403 {object} AuthErrorResponse
+// @Failure 404 {object} AuthErrorResponse
+// @Failure 500 {object} AuthErrorResponse
 // @Router /auth/whoami [get]
 func (h *AuthHandler) WhoAmI(c *gin.Context) {
 	// UserID добавляется в контекст middleware
@@ -191,7 +212,13 @@ func (h *AuthHandler) WhoAmI(c *gin.Context) {
 // @Summary Выход из текущей сессии
 // @Tags auth
 // @Produce json
-// @Success 200 {object} map[string]interface{}
+// @Security CookieAuth
+// @Success 200 {object} dto.LogoutResponse
+// @Failure 400 {object} AuthErrorResponse
+// @Failure 401 {object} AuthErrorResponse
+// @Failure 403 {object} AuthErrorResponse
+// @Failure 404 {object} AuthErrorResponse
+// @Failure 500 {object} AuthErrorResponse
 // @Router /auth/logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
 	refreshToken, err := c.Cookie("refresh_token")
@@ -209,14 +236,22 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	c.SetCookie("access_token", "", -1, "/", "", false, true)
 	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
 
-	c.JSON(http.StatusOK, gin.H{"message": "успешный выход"})
+	c.JSON(http.StatusOK, dto.LogoutResponse{
+		Message: "успешный выход",
+	})
 }
 
 // LogoutAll обрабатывает POST /auth/logout-all
 // @Summary Выход из всех сессий
 // @Tags auth
 // @Produce json
-// @Success 200 {object} map[string]interface{}
+// @Security CookieAuth
+// @Success 200 {object} dto.LogoutAllResponse
+// @Failure 400 {object} AuthErrorResponse
+// @Failure 401 {object} AuthErrorResponse
+// @Failure 403 {object} AuthErrorResponse
+// @Failure 404 {object} AuthErrorResponse
+// @Failure 500 {object} AuthErrorResponse
 // @Router /auth/logout-all [post]
 func (h *AuthHandler) LogoutAll(c *gin.Context) {
 	userID, exists := c.Get("userID")
@@ -240,5 +275,7 @@ func (h *AuthHandler) LogoutAll(c *gin.Context) {
 	c.SetCookie("access_token", "", -1, "/", "", false, true)
 	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
 
-	c.JSON(http.StatusOK, gin.H{"message": "успешный выход из всех сессий"})
+	c.JSON(http.StatusOK, dto.LogoutAllResponse{
+		Message: "успешный выход из всех сессий",
+	})
 }

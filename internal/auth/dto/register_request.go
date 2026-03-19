@@ -8,9 +8,9 @@ import (
 
 // RegisterRequest представляет данные для регистрации пользователя
 type RegisterRequest struct {
-	Email    string `json:"email" binding:"required"`
-	Password string `json:"password" binding:"required"`
-	Phone    string `json:"phone,omitempty"`
+	Email    string `json:"email" binding:"required" format:"email" example:"student@example.com"`
+	Password string `json:"password" binding:"required" minLength:"8" example:"StrongPass123"`
+	Phone    string `json:"phone,omitempty" example:"+79991234567"`
 }
 
 // Validate проверяет корректность данных регистрации

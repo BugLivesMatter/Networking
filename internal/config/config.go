@@ -15,6 +15,7 @@ type Config struct {
 	DBPassword string
 	DBName     string
 	Port       int
+	AppEnv     string
 
 	// JWT конфигурация
 	JWTAccessSecret      string
@@ -41,6 +42,7 @@ func Load() (*Config, error) {
 		DBPassword: getEnv("DB_PASSWORD", ""),
 		DBName:     getEnv("DB_NAME", "wp_labs"),
 		Port:       port,
+		AppEnv:     getEnv("APP_ENV", "development"),
 
 		// JWT
 		JWTAccessSecret:      getEnv("JWT_ACCESS_SECRET", ""),

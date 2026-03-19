@@ -3,29 +3,29 @@ package dto
 import "github.com/lab2/rest-api/internal/domain"
 
 type CreateCategoryRequest struct {
-	Name        string `json:"name" binding:"required"`
-	Description string `json:"description"`
-	Status      string `json:"status" binding:"omitempty,oneof=active hidden"`
+	Name        string `json:"name" binding:"required" example:"Электроника"`
+	Description string `json:"description" example:"Товары и устройства"`
+	Status      string `json:"status" binding:"omitempty,oneof=active hidden" example:"active"`
 }
 
 type UpdateCategoryRequest struct {
-	Name        string `json:"name" binding:"required"`
-	Description string `json:"description"`
-	Status      string `json:"status" binding:"required,oneof=active hidden"`
+	Name        string `json:"name" binding:"required" example:"Электроника"`
+	Description string `json:"description" example:"Товары и устройства"`
+	Status      string `json:"status" binding:"required,oneof=active hidden" example:"active"`
 }
 
 type PatchCategoryRequest struct {
-	Name        *string `json:"name"`
-	Description *string `json:"description"`
-	Status      *string `json:"status" binding:"omitempty,oneof=active hidden"`
+	Name        *string `json:"name" example:"Электроника"`
+	Description *string `json:"description" example:"Товары и устройства"`
+	Status      *string `json:"status" binding:"omitempty,oneof=active hidden" example:"hidden"`
 }
 
 type CategoryResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Status      string `json:"status"`
-	CreatedAt   string `json:"createdAt"`
+	ID          string `json:"id" format:"uuid" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Name        string `json:"name" example:"Электроника"`
+	Description string `json:"description" example:"Товары и устройства"`
+	Status      string `json:"status" example:"active"`
+	CreatedAt   string `json:"createdAt" format:"date-time" example:"2026-03-19T13:18:48.000Z"`
 }
 
 type CategoryListResponse struct {

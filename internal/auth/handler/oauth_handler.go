@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/lab2/rest-api/internal/auth/service"
+	"github.com/lab2/rest-api/internal/auth/dto"
 )
 
 // OAuthHandler обрабатывает OAuth запросы
@@ -22,8 +23,14 @@ func NewOAuthHandler(oauthService service.OAuthService) *OAuthHandler {
 // InitOAuth инициирует OAuth авторизацию
 // @Summary Инициация OAuth авторизации
 // @Tags auth
+// @Produce json
 // @Param provider path string true "Провайдер (yandex)"
 // @Success 302 "Редирект на провайдера"
+// @Failure 400 {object} AuthErrorResponse
+// @Failure 401 {object} AuthErrorResponse
+// @Failure 403 {object} AuthErrorResponse
+// @Failure 404 {object} AuthErrorResponse
+// @Failure 500 {object} AuthErrorResponse
 // @Router /auth/oauth/{provider} [get]
 func (h *OAuthHandler) InitOAuth(c *gin.Context) {
 	provider := c.Param("provider")
@@ -43,10 +50,16 @@ func (h *OAuthHandler) InitOAuth(c *gin.Context) {
 // OAuthCallback обрабатывает callback от OAuth провайдера
 // @Summary Обработка OAuth callback
 // @Tags auth
+// @Produce json
 // @Param provider path string true "Провайдер (yandex)"
 // @Param code query string true "Код авторизации"
 // @Param state query string true "State токен"
-// @Success 200 {object} map[string]interface{}
+// @Success 200 {object} dto.OAuthCallbackResponse "успешный вход через OAuth (JWT в HttpOnly cookies)"
+// @Failure 400 {object} AuthErrorResponse
+// @Failure 401 {object} AuthErrorResponse
+// @Failure 403 {object} AuthErrorResponse
+// @Failure 404 {object} AuthErrorResponse
+// @Failure 500 {object} AuthErrorResponse
 // @Router /auth/oauth/{provider}/callback [get]
 func (h *OAuthHandler) OAuthCallback(c *gin.Context) {
 	provider := c.Param("provider")
@@ -88,9 +101,9 @@ func (h *OAuthHandler) OAuthCallback(c *gin.Context) {
 		true,
 	)
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "успешный вход через OAuth",
-		"userId":  user.ID,
-		"email":   user.Email,
+	c.JSON(http.StatusOK, dto.OAuthCallbackResponse{
+		Message: "успешный вход через OAuth",
+		UserID:  user.ID,
+		Email:   user.Email,
 	})
 }

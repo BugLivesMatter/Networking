@@ -49,9 +49,9 @@ func (u *User) ToResponse() *UserResponse {
 
 // UserResponse — DTO для возврата данных пользователя клиенту
 type UserResponse struct {
-	ID        uuid.UUID `json:"id"`
-	Email     string    `json:"email"`
-	Phone     string    `json:"phone,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID        uuid.UUID `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Email     string    `json:"email" example:"student@example.com"`
+	Phone     string    `json:"phone,omitempty" example:"+79991234567"`
+	CreatedAt time.Time `json:"createdAt" format:"date-time" example:"2026-03-19T13:18:48.000Z"`
+	UpdatedAt time.Time `json:"updatedAt" format:"date-time" example:"2026-03-19T13:18:48.000Z"`
 }

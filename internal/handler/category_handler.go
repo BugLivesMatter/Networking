@@ -18,6 +18,20 @@ func NewCategoryHandler(svc service.CategoryService) *CategoryHandler {
 	return &CategoryHandler{svc: svc}
 }
 
+// Create обрабатывает POST /categories
+// @Summary Создать категорию
+// @Tags categories
+// @Accept json
+// @Produce json
+// @Security CookieAuth
+// @Param request body dto.CreateCategoryRequest true "Тело запроса"
+// @Success 201 {object} dto.CategoryResponse "категория создана"
+// @Failure 400 {object} AppErrorResponse
+// @Failure 401 {object} AppErrorResponse
+// @Failure 403 {object} AppErrorResponse
+// @Failure 404 {object} AppErrorResponse
+// @Failure 500 {object} AppErrorResponse
+// @Router /categories [post]
 func (h *CategoryHandler) Create(c *gin.Context) {
 	var req dto.CreateCategoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -33,6 +47,19 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, dto.CategoryToResponse(category))
 }
 
+// GetByID обрабатывает GET /categories/{id}
+// @Summary Получить категорию по UUID
+// @Tags categories
+// @Produce json
+// @Security CookieAuth
+// @Param id path string true "UUID категории"
+// @Success 200 {object} dto.CategoryResponse "категория найдена"
+// @Failure 400 {object} AppErrorResponse
+// @Failure 401 {object} AppErrorResponse
+// @Failure 403 {object} AppErrorResponse
+// @Failure 404 {object} AppErrorResponse
+// @Failure 500 {object} AppErrorResponse
+// @Router /categories/{id} [get]
 func (h *CategoryHandler) GetByID(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -49,6 +76,20 @@ func (h *CategoryHandler) GetByID(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.CategoryToResponse(category))
 }
 
+// List обрабатывает GET /categories
+// @Summary Список категорий
+// @Tags categories
+// @Produce json
+// @Security CookieAuth
+// @Param page query int false "Номер страницы" example(1)
+// @Param limit query int false "Количество элементов на странице" example(10)
+// @Success 200 {object} dto.CategoryListResponse "список категорий"
+// @Failure 400 {object} AppErrorResponse
+// @Failure 401 {object} AppErrorResponse
+// @Failure 403 {object} AppErrorResponse
+// @Failure 404 {object} AppErrorResponse
+// @Failure 500 {object} AppErrorResponse
+// @Router /categories [get]
 func (h *CategoryHandler) List(c *gin.Context) {
 	page := 1
 	limit := dto.DefaultLimit
@@ -83,6 +124,21 @@ func (h *CategoryHandler) List(c *gin.Context) {
 	})
 }
 
+// Update обрабатывает PUT /categories/{id}
+// @Summary Полное обновление категории
+// @Tags categories
+// @Accept json
+// @Produce json
+// @Security CookieAuth
+// @Param id path string true "UUID категории"
+// @Param request body dto.UpdateCategoryRequest true "Тело запроса"
+// @Success 200 {object} dto.CategoryResponse "категория обновлена"
+// @Failure 400 {object} AppErrorResponse
+// @Failure 401 {object} AppErrorResponse
+// @Failure 403 {object} AppErrorResponse
+// @Failure 404 {object} AppErrorResponse
+// @Failure 500 {object} AppErrorResponse
+// @Router /categories/{id} [put]
 func (h *CategoryHandler) Update(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -104,6 +160,21 @@ func (h *CategoryHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.CategoryToResponse(category))
 }
 
+// Patch обрабатывает PATCH /categories/{id}
+// @Summary Частичное обновление категории
+// @Tags categories
+// @Accept json
+// @Produce json
+// @Security CookieAuth
+// @Param id path string true "UUID категории"
+// @Param request body dto.PatchCategoryRequest true "Тело запроса"
+// @Success 200 {object} dto.CategoryResponse "категория обновлена"
+// @Failure 400 {object} AppErrorResponse
+// @Failure 401 {object} AppErrorResponse
+// @Failure 403 {object} AppErrorResponse
+// @Failure 404 {object} AppErrorResponse
+// @Failure 500 {object} AppErrorResponse
+// @Router /categories/{id} [patch]
 func (h *CategoryHandler) Patch(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -125,6 +196,19 @@ func (h *CategoryHandler) Patch(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.CategoryToResponse(category))
 }
 
+// Delete обрабатывает DELETE /categories/{id}
+// @Summary Удалить категорию (soft delete)
+// @Tags categories
+// @Produce json
+// @Security CookieAuth
+// @Param id path string true "UUID категории"
+// @Success 204 "категория удалена"
+// @Failure 400 {object} AppErrorResponse
+// @Failure 401 {object} AppErrorResponse
+// @Failure 403 {object} AppErrorResponse
+// @Failure 404 {object} AppErrorResponse
+// @Failure 500 {object} AppErrorResponse
+// @Router /categories/{id} [delete]
 func (h *CategoryHandler) Delete(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)

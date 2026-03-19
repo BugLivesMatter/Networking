@@ -7,8 +7,8 @@ const (
 )
 
 type Meta struct {
-	Total      int64 `json:"total"`
-	Page       int   `json:"page"`
-	Limit      int   `json:"limit"`
-	TotalPages int   `json:"totalPages"`
+	Total      int64 `json:"total" example:"42"`
+	Page       int   `json:"page" example:"1"`
+	Limit      int   `json:"limit" example:"10"`
+	TotalPages int   `json:"totalPages" example:"5"`
 }

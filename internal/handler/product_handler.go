@@ -18,6 +18,20 @@ func NewProductHandler(svc service.ProductService) *ProductHandler {
 	return &ProductHandler{svc: svc}
 }
 
+// Create обрабатывает POST /products
+// @Summary Создать продукт
+// @Tags products
+// @Accept json
+// @Produce json
+// @Security CookieAuth
+// @Param request body dto.CreateProductRequest true "Тело запроса"
+// @Success 201 {object} dto.ProductResponse "продукт создан"
+// @Failure 400 {object} AppErrorResponse
+// @Failure 401 {object} AppErrorResponse
+// @Failure 403 {object} AppErrorResponse
+// @Failure 404 {object} AppErrorResponse
+// @Failure 500 {object} AppErrorResponse
+// @Router /products [post]
 func (h *ProductHandler) Create(c *gin.Context) {
 	var req dto.CreateProductRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -33,6 +47,19 @@ func (h *ProductHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, dto.ProductToResponse(product))
 }
 
+// GetByID обрабатывает GET /products/{id}
+// @Summary Получить продукт по UUID
+// @Tags products
+// @Produce json
+// @Security CookieAuth
+// @Param id path string true "UUID продукта"
+// @Success 200 {object} dto.ProductResponse "продукт найден"
+// @Failure 400 {object} AppErrorResponse
+// @Failure 401 {object} AppErrorResponse
+// @Failure 403 {object} AppErrorResponse
+// @Failure 404 {object} AppErrorResponse
+// @Failure 500 {object} AppErrorResponse
+// @Router /products/{id} [get]
 func (h *ProductHandler) GetByID(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -49,6 +76,21 @@ func (h *ProductHandler) GetByID(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.ProductToResponse(product))
 }
 
+// List обрабатывает GET /products
+// @Summary Список продуктов
+// @Tags products
+// @Produce json
+// @Security CookieAuth
+// @Param category_id query string false "Фильтр по UUID категории"
+// @Param page query int false "Номер страницы" example(1)
+// @Param limit query int false "Количество элементов на странице" example(10)
+// @Success 200 {object} dto.ProductListResponse "список продуктов"
+// @Failure 400 {object} AppErrorResponse
+// @Failure 401 {object} AppErrorResponse
+// @Failure 403 {object} AppErrorResponse
+// @Failure 404 {object} AppErrorResponse
+// @Failure 500 {object} AppErrorResponse
+// @Router /products [get]
 func (h *ProductHandler) List(c *gin.Context) {
 	page := 1
 	limit := dto.DefaultLimit
@@ -89,6 +131,21 @@ func (h *ProductHandler) List(c *gin.Context) {
 	})
 }
 
+// Update обрабатывает PUT /products/{id}
+// @Summary Полное обновление продукта
+// @Tags products
+// @Accept json
+// @Produce json
+// @Security CookieAuth
+// @Param id path string true "UUID продукта"
+// @Param request body dto.UpdateProductRequest true "Тело запроса"
+// @Success 200 {object} dto.ProductResponse "продукт обновлён"
+// @Failure 400 {object} AppErrorResponse
+// @Failure 401 {object} AppErrorResponse
+// @Failure 403 {object} AppErrorResponse
+// @Failure 404 {object} AppErrorResponse
+// @Failure 500 {object} AppErrorResponse
+// @Router /products/{id} [put]
 func (h *ProductHandler) Update(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -110,6 +167,21 @@ func (h *ProductHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.ProductToResponse(product))
 }
 
+// Patch обрабатывает PATCH /products/{id}
+// @Summary Частичное обновление продукта
+// @Tags products
+// @Accept json
+// @Produce json
+// @Security CookieAuth
+// @Param id path string true "UUID продукта"
+// @Param request body dto.PatchProductRequest true "Тело запроса"
+// @Success 200 {object} dto.ProductResponse "продукт обновлён"
+// @Failure 400 {object} AppErrorResponse
+// @Failure 401 {object} AppErrorResponse
+// @Failure 403 {object} AppErrorResponse
+// @Failure 404 {object} AppErrorResponse
+// @Failure 500 {object} AppErrorResponse
+// @Router /products/{id} [patch]
 func (h *ProductHandler) Patch(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
@@ -131,6 +203,19 @@ func (h *ProductHandler) Patch(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.ProductToResponse(product))
 }
 
+// Delete обрабатывает DELETE /products/{id}
+// @Summary Удалить продукт (soft delete)
+// @Tags products
+// @Produce json
+// @Security CookieAuth
+// @Param id path string true "UUID продукта"
+// @Success 204 "продукт удалён"
+// @Failure 400 {object} AppErrorResponse
+// @Failure 401 {object} AppErrorResponse
+// @Failure 403 {object} AppErrorResponse
+// @Failure 404 {object} AppErrorResponse
+// @Failure 500 {object} AppErrorResponse
+// @Router /products/{id} [delete]
 func (h *ProductHandler) Delete(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
