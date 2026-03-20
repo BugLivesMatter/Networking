@@ -149,7 +149,41 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery(), middleware.Recovery())
 	if cfg.AppEnv != "production" {
-		r.GET("/api/docs/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+		swaggerHandler := ginSwagger.WrapHandler(
+			swaggerfiles.Handler,
+			ginSwagger.PersistAuthorization(true),
+		)
+		// Перехватываем swagger-initializer.js и подменяем его версией с withCredentials: true
+		// и requestInterceptor, чтобы браузер автоматически прикреплял HttpOnly cookies
+		// к запросам Swagger UI (аналог fetch с credentials: 'include').
+		r.GET("/api/docs/*any", func(c *gin.Context) {
+			if c.Param("any") == "/swagger-initializer.js" {
+				c.Header("Content-Type", "application/javascript")
+				c.String(http.StatusOK, `window.onload = function() {
+  const ui = SwaggerUIBundle({
+    url: "doc.json",
+    dom_id: '#swagger-ui',
+    validatorUrl: null,
+    withCredentials: true,
+    requestInterceptor: (request) => {
+      request.credentials = 'include';
+      return request;
+    },
+    oauth2RedirectUrl: window.location.origin + window.location.pathname.replace('swagger-initializer.js', '') + 'oauth2-redirect.html',
+    persistAuthorization: true,
+    presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+    plugins: [SwaggerUIBundle.plugins.DownloadUrl],
+    layout: "StandaloneLayout",
+    docExpansion: "list",
+    deepLinking: true,
+    defaultModelsExpandDepth: 1
+  })
+  window.ui = ui
+}`)
+				return
+			}
+			swaggerHandler(c)
+		})
 	}
 
 	// ========== PUBLIC ROUTES (без авторизации) ==========

@@ -41,8 +41,9 @@ func (h *OAuthHandler) InitOAuth(c *gin.Context) {
 		return
 	}
 
-	// Сохраняем state в cookie для проверки в callback
-	c.SetCookie("oauth_state", state, 300, "/auth/oauth/"+provider+"/callback", "", false, true)
+	// Сохраняем state в cookie для проверки в callback.
+	// Path "/" — чтобы браузер отправил куку при редиректе на /auth/oauth/{provider}/callback.
+	c.SetCookie("oauth_state", state, 300, "/", "", false, true)
 
 	c.Redirect(http.StatusFound, authURL)
 }
