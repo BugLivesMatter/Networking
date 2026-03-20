@@ -1,0 +1,1285 @@
+basePath: /
+definitions:
+  domain.UserResponse:
+    properties:
+      createdAt:
+        example: "2026-03-19T13:18:48.000Z"
+        format: date-time
+        type: string
+      email:
+        example: student@example.com
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      phone:
+        example: "+79991234567"
+        type: string
+      updatedAt:
+        example: "2026-03-19T13:18:48.000Z"
+        format: date-time
+        type: string
+    type: object
+  dto.CategoryListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.CategoryResponse'
+        type: array
+      meta:
+        $ref: '#/definitions/dto.Meta'
+    type: object
+  dto.CategoryResponse:
+    properties:
+      createdAt:
+        example: "2026-03-19T13:18:48.000Z"
+        format: date-time
+        type: string
+      description:
+        example: Товары и устройства
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        format: uuid
+        type: string
+      name:
+        example: Электроника
+        type: string
+      status:
+        example: active
+        type: string
+    type: object
+  dto.CreateCategoryRequest:
+    properties:
+      description:
+        example: Товары и устройства
+        type: string
+      name:
+        example: Электроника
+        type: string
+      status:
+        enum:
+        - active
+        - hidden
+        example: active
+        type: string
+    required:
+    - name
+    type: object
+  dto.CreateProductRequest:
+    properties:
+      categoryId:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        format: uuid
+        type: string
+      description:
+        example: 14 дюймов, 16GB RAM
+        type: string
+      name:
+        example: Ноутбук
+        type: string
+      price:
+        example: 79990.5
+        minimum: 0
+        type: number
+      status:
+        enum:
+        - available
+        - out_of_stock
+        - discontinued
+        example: available
+        type: string
+    required:
+    - categoryId
+    - name
+    - price
+    type: object
+  dto.ForgotPasswordRequest:
+    properties:
+      email:
+        example: student@example.com
+        format: email
+        type: string
+    required:
+    - email
+    type: object
+  dto.ForgotPasswordResponse:
+    properties:
+      message:
+        example: если пользователь существует, письмо для сброса пароля отправлено
+        type: string
+    type: object
+  dto.LoginRequest:
+    properties:
+      email:
+        example: student@example.com
+        format: email
+        type: string
+      password:
+        example: StrongPass123
+        minLength: 8
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  dto.LoginResponse:
+    properties:
+      accessExpiresIn:
+        example: 15m
+        type: string
+      message:
+        example: успешный вход
+        type: string
+      refreshExpiresIn:
+        example: 7d
+        type: string
+    type: object
+  dto.LogoutAllResponse:
+    properties:
+      message:
+        example: успешный выход из всех сессий
+        type: string
+    type: object
+  dto.LogoutResponse:
+    properties:
+      message:
+        example: успешный выход
+        type: string
+    type: object
+  dto.Meta:
+    properties:
+      limit:
+        example: 10
+        type: integer
+      page:
+        example: 1
+        type: integer
+      total:
+        example: 42
+        type: integer
+      totalPages:
+        example: 5
+        type: integer
+    type: object
+  dto.OAuthCallbackResponse:
+    properties:
+      email:
+        example: student@example.com
+        type: string
+      message:
+        example: успешный вход через OAuth
+        type: string
+      userId:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    type: object
+  dto.PatchCategoryRequest:
+    properties:
+      description:
+        example: Товары и устройства
+        type: string
+      name:
+        example: Электроника
+        type: string
+      status:
+        enum:
+        - active
+        - hidden
+        example: hidden
+        type: string
+    type: object
+  dto.PatchProductRequest:
+    properties:
+      categoryId:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        format: uuid
+        type: string
+      description:
+        example: 14 дюймов, 16GB RAM
+        type: string
+      name:
+        example: Ноутбук
+        type: string
+      price:
+        example: 79990.5
+        minimum: 0
+        type: number
+      status:
+        enum:
+        - available
+        - out_of_stock
+        - discontinued
+        example: out_of_stock
+        type: string
+    type: object
+  dto.ProductListResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/dto.ProductResponse'
+        type: array
+      meta:
+        $ref: '#/definitions/dto.Meta'
+    type: object
+  dto.ProductResponse:
+    properties:
+      categoryId:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        format: uuid
+        type: string
+      categoryName:
+        example: Электроника
+        type: string
+      createdAt:
+        example: "2026-03-19T13:18:48.000Z"
+        format: date-time
+        type: string
+      description:
+        example: 14 дюймов, 16GB RAM
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440001
+        format: uuid
+        type: string
+      name:
+        example: Ноутбук
+        type: string
+      price:
+        example: 79990.5
+        type: number
+      status:
+        example: available
+        type: string
+    type: object
+  dto.RefreshResponse:
+    properties:
+      accessExpiresIn:
+        example: 15m
+        type: string
+      message:
+        example: токены обновлены
+        type: string
+      refreshExpiresIn:
+        example: 7d
+        type: string
+    type: object
+  dto.RegisterRequest:
+    properties:
+      email:
+        example: student@example.com
+        format: email
+        type: string
+      password:
+        example: StrongPass123
+        minLength: 8
+        type: string
+      phone:
+        example: "+79991234567"
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  dto.RegisterResponse:
+    properties:
+      message:
+        example: пользователь успешно зарегистрирован
+        type: string
+      userId:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    type: object
+  dto.ResetPasswordRequest:
+    properties:
+      new_password:
+        example: NewStrongPass123
+        minLength: 8
+        type: string
+      token:
+        example: 9f6c2b7e-7f6a-4ad0-9e0a-0b8c3d4e5f60
+        type: string
+    required:
+    - new_password
+    - token
+    type: object
+  dto.ResetPasswordResponse:
+    properties:
+      message:
+        example: пароль успешно изменён
+        type: string
+    type: object
+  dto.UpdateCategoryRequest:
+    properties:
+      description:
+        example: Товары и устройства
+        type: string
+      name:
+        example: Электроника
+        type: string
+      status:
+        enum:
+        - active
+        - hidden
+        example: active
+        type: string
+    required:
+    - name
+    - status
+    type: object
+  dto.UpdateProductRequest:
+    properties:
+      categoryId:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        format: uuid
+        type: string
+      description:
+        example: 14 дюймов, 16GB RAM
+        type: string
+      name:
+        example: Ноутбук
+        type: string
+      price:
+        example: 79990.5
+        minimum: 0
+        type: number
+      status:
+        enum:
+        - available
+        - out_of_stock
+        - discontinued
+        example: available
+        type: string
+    required:
+    - categoryId
+    - name
+    - price
+    - status
+    type: object
+  handler.AppErrorResponse:
+    properties:
+      error:
+        example: invalid category id
+        type: string
+    type: object
+  handler.AuthErrorResponse:
+    properties:
+      error:
+        example: invalid_or_expired_token
+        type: string
+    type: object
+host: localhost:4200
+info:
+  contact: {}
+  description: REST API для управления категориями и продуктами с JWT и OAuth2 авторизацией.
+  title: Lab 2-4 REST API
+  version: "1.0"
+paths:
+  /auth/forgot-password:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Email пользователя
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: сообщение о выполнении запроса
+          schema:
+            $ref: '#/definitions/dto.ForgotPasswordResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+      summary: Запрос сброса пароля
+      tags:
+      - auth
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Данные для входа
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: успешный вход (JWT в HttpOnly cookies)
+          schema:
+            $ref: '#/definitions/dto.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+      summary: Вход пользователя
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.LogoutResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Выход из текущей сессии
+      tags:
+      - auth
+  /auth/logout-all:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.LogoutAllResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Выход из всех сессий
+      tags:
+      - auth
+  /auth/oauth/{provider}:
+    get:
+      parameters:
+      - description: Провайдер (yandex)
+        in: path
+        name: provider
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Редирект на провайдера
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+      summary: Инициация OAuth авторизации
+      tags:
+      - auth
+  /auth/oauth/{provider}/callback:
+    get:
+      parameters:
+      - description: Провайдер (yandex)
+        in: path
+        name: provider
+        required: true
+        type: string
+      - description: Код авторизации
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: State токен
+        in: query
+        name: state
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: успешный вход через OAuth (JWT в HttpOnly cookies)
+          schema:
+            $ref: '#/definitions/dto.OAuthCallbackResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+      summary: Обработка OAuth callback
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: успешное обновление (JWT в HttpOnly cookies)
+          schema:
+            $ref: '#/definitions/dto.RefreshResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+      summary: Обновление токенов
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Данные для регистрации
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: успешная регистрация
+          schema:
+            $ref: '#/definitions/dto.RegisterResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+      summary: Регистрация пользователя
+      tags:
+      - auth
+  /auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Токен и новый пароль
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: пароль успешно изменён
+          schema:
+            $ref: '#/definitions/dto.ResetPasswordResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+      summary: Установка нового пароля по токену
+      tags:
+      - auth
+  /auth/whoami:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: данные текущего пользователя
+          schema:
+            $ref: '#/definitions/domain.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Получение данных текущего пользователя
+      tags:
+      - auth
+  /categories:
+    get:
+      parameters:
+      - description: Номер страницы
+        example: 1
+        in: query
+        name: page
+        type: integer
+      - description: Количество элементов на странице
+        example: 10
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: список категорий
+          schema:
+            $ref: '#/definitions/dto.CategoryListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Список категорий
+      tags:
+      - categories
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Тело запроса
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateCategoryRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: категория создана
+          schema:
+            $ref: '#/definitions/dto.CategoryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Создать категорию
+      tags:
+      - categories
+  /categories/{id}:
+    delete:
+      parameters:
+      - description: UUID категории
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: категория удалена
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Удалить категорию (soft delete)
+      tags:
+      - categories
+    get:
+      parameters:
+      - description: UUID категории
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: категория найдена
+          schema:
+            $ref: '#/definitions/dto.CategoryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Получить категорию по UUID
+      tags:
+      - categories
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: UUID категории
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Тело запроса
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.PatchCategoryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: категория обновлена
+          schema:
+            $ref: '#/definitions/dto.CategoryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Частичное обновление категории
+      tags:
+      - categories
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: UUID категории
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Тело запроса
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateCategoryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: категория обновлена
+          schema:
+            $ref: '#/definitions/dto.CategoryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Полное обновление категории
+      tags:
+      - categories
+  /products:
+    get:
+      parameters:
+      - description: Фильтр по UUID категории
+        in: query
+        name: category_id
+        type: string
+      - description: Номер страницы
+        example: 1
+        in: query
+        name: page
+        type: integer
+      - description: Количество элементов на странице
+        example: 10
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: список продуктов
+          schema:
+            $ref: '#/definitions/dto.ProductListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Список продуктов
+      tags:
+      - products
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Тело запроса
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: продукт создан
+          schema:
+            $ref: '#/definitions/dto.ProductResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Создать продукт
+      tags:
+      - products
+  /products/{id}:
+    delete:
+      parameters:
+      - description: UUID продукта
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: продукт удалён
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Удалить продукт (soft delete)
+      tags:
+      - products
+    get:
+      parameters:
+      - description: UUID продукта
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: продукт найден
+          schema:
+            $ref: '#/definitions/dto.ProductResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Получить продукт по UUID
+      tags:
+      - products
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: UUID продукта
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Тело запроса
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.PatchProductRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: продукт обновлён
+          schema:
+            $ref: '#/definitions/dto.ProductResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Частичное обновление продукта
+      tags:
+      - products
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: UUID продукта
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Тело запроса
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateProductRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: продукт обновлён
+          schema:
+            $ref: '#/definitions/dto.ProductResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AppErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Полное обновление продукта
+      tags:
+      - products
+securityDefinitions:
+  CookieAuth:
+    in: cookie
+    name: access_token
+    type: apiKey
+swagger: "2.0"

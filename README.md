@@ -1,102 +1,164 @@
-# Лабораторная работа №2: RESTful API
+# Лабораторные работы №2–4: REST API с авторизацией и документацией Swagger
 
 ## Описание проекта
-RESTful API для управления категориями и продуктами. Реализованы:
-- Полный CRUD для категорий и продуктов
-- Пагинация списков с мета-информацией
-- Мягкое удаление (Soft Delete) через поле `deleted_at`
-- Миграции базы данных через `golang-migrate`
-- Локальный desktop GUI-клиент в папке `app/` для работы с API как с компактным Postman-клиентом
 
-## Инструкция по запуску
+RESTful API на Go (Gin + PostgreSQL) с полным циклом аутентификации, CRUD-ресурсами и автоматической документацией OpenAPI (Swagger).
+
+### Что реализовано
+
+**Лабораторная работа №2 — CRUD REST API:**
+- Ресурсы: категории (`/categories`) и продукты (`/products`)
+- Полный CRUD с поддержкой пагинации (`page`, `limit`)
+- Мягкое удаление (Soft Delete)
+- Миграции базы данных через `golang-migrate`
+
+**Лабораторная работа №3 — Авторизация и аутентификация:**
+- Регистрация, вход, выход, сброс пароля
+- JWT Access (15 мин) + Refresh (7 дней) токены с подписью HS256
+- Передача токенов через `HttpOnly`, `SameSite` cookies
+- Хеширование паролей: `bcrypt` с уникальной солью
+- Refresh-токены в БД с возможностью отзыва (logout / logout-all)
+- Авторизация через Яндекс (Authorization Code Grant, реализован вручную)
+- CSRF-защита через параметр `state` в OAuth
+- Все эндпоинты `/categories` и `/products` защищены JWT-middleware
+
+**Лабораторная работа №4 — Swagger / OpenAPI документация:**
+- Автоматическая генерация спецификации через `swaggo/swag` (Code-First подход)
+- Все эндпоинты аннотированы: теги, описания, коды ответов, примеры
+- Swagger UI доступен **только в режиме `development`** — при `APP_ENV=production` маршрут `/api/docs` возвращает 404
+- Настроена схема безопасности `CookieAuth` (apiKey в cookie `access_token`)
+- Чувствительные поля (пароли, соли, хеши токенов) исключены из схем ответов
+
+---
+
+## Быстрый старт
 
 ### 1. Клонирование репозитория
+
 ```bash
 git clone https://github.com/BugLivesMatter/lab_2.git
 cd lab_2
+git checkout lab4/swagger-openapi
 ```
 
-### 2. Проверка переменных окружения
-Файл `.env` уже присутствует в корне проекта. Убедитесь, что он содержит следующие параметры:
+### 2. Настройка переменных окружения
+
+Скопируйте `.env.example` в `.env` и при необходимости отредактируйте значения:
+
+```bash
+cp .env.example .env
+```
+
+Минимально необходимое содержимое `.env`:
 
 ```env
+# === Database ===
+DB_HOST=postgres
+DB_PORT=5432
 DB_USER=student
 DB_PASSWORD=student
 DB_NAME=wp_labs
+
+# === JWT Secrets (мин. 32 символа) ===
+JWT_ACCESS_SECRET=your_access_secret_key_min_32_chars
+JWT_REFRESH_SECRET=your_refresh_secret_key_min_32_chars
+JWT_ACCESS_EXPIRATION=15m
+JWT_REFRESH_EXPIRATION=168h
+
+# === OAuth2 Yandex ===
+YANDEX_CLIENT_ID=your_yandex_client_id
+YANDEX_CLIENT_SECRET=your_yandex_client_secret
+YANDEX_CALLBACK_URL=http://localhost:4200/auth/oauth/yandex/callback
+
+# === App environment ===
+APP_ENV=development
 ```
 
-При необходимости отредактируйте значения под вашу среду.
+> **Важно:** Никогда не коммитьте `.env` с реальными секретами. Используйте `.env.example` как шаблон.
 
-### 3. Запуск приложения
+### 3. Запуск через Docker
+
 ```bash
 docker-compose up --build
 ```
 
 Приложение будет доступно по адресу: `http://localhost:4200`
 
-### 4. Остановка приложения
+### 4. Остановка
+
 ```bash
 docker-compose down
 ```
 
-## Локальный desktop-клиент `app/`
-
-В папке `app/` находится отдельное локальное Go-приложение с графическим окном (Windows), без Docker и без отдельного backend-порта для клиента.  
-Оно подключается к уже запущенному API по адресу `http://localhost:4200` и даёт:
-
-- готовые пресеты для `GET / POST / PUT / PATCH / DELETE`;
-- просмотр JSON-ответов;
-- табличный вид результатов;
-- отдельные вкладки для live-данных и структуры сущностей (schema).
-
-Примечание: клиент использует нативные Windows-виджеты через `walk`.
-
-Запуск:
+### 5. Полная очистка (удаление данных БД)
 
 ```bash
-go run ./app
+docker-compose down -v
 ```
 
-Если API слушает другой адрес, можно задать его так:
+---
 
-```bash
-set API_BASE_URL=http://localhost:4200
-go run ./app
-```
+## Swagger UI
+
+Документация API доступна при `APP_ENV=development`:
+
+**`http://localhost:4200/api/docs/index.html`**
+
+> При `APP_ENV=production` маршрут `/api/docs` возвращает `404 Not Found`.
+
+Для тестирования защищённых эндпоинтов:
+1. Выполните `POST /auth/login` — cookies установятся автоматически в браузере
+2. Нажмите **Authorize** в Swagger UI и введите значение `access_token` из cookie
+3. Запросы к защищённым ресурсам (`/categories`, `/products`, `/auth/whoami`) будут проходить успешно
+
+---
 
 ## Описание API
 
-### Категории
+### Авторизация и аутентификация
 
-| Метод | Эндпоинт | Описание |
-|-------|----------|----------|
-| `GET` | `/categories` | Список категорий с пагинацией |
-| `GET` | `/categories/:id` | Получить категорию по ID |
-| `POST` | `/categories` | Создать категорию |
-| `PUT` | `/categories/:id` | Полное обновление категории |
-| `PATCH` | `/categories/:id` | Частичное обновление категории |
-| `DELETE` | `/categories/:id` | Мягкое удаление категории |
+| Метод | Эндпоинт | Описание | Доступ | Статус успеха |
+|-------|----------|----------|--------|---------------|
+| `POST` | `/auth/register` | Регистрация нового пользователя | Public | `201 Created` |
+| `POST` | `/auth/login` | Вход (установка cookies) | Public | `200 OK` |
+| `POST` | `/auth/refresh` | Обновление пары токенов | Public (Refresh Cookie) | `200 OK` |
+| `GET` | `/auth/whoami` | Данные текущего пользователя | Private | `200 OK` |
+| `POST` | `/auth/logout` | Завершение текущей сессии | Private | `200 OK` |
+| `POST` | `/auth/logout-all` | Завершение всех сессий | Private | `200 OK` |
+| `GET` | `/auth/oauth/:provider` | Инициация входа через OAuth | Public | `302 Redirect` |
+| `GET` | `/auth/oauth/:provider/callback` | Обработка ответа от OAuth | Public | `200 OK` |
+| `POST` | `/auth/forgot-password` | Запрос на сброс пароля | Public | `200 OK` |
+| `POST` | `/auth/reset-password` | Установка нового пароля | Public | `200 OK` |
 
-### Продукты
+### Категории (требуют авторизации)
 
-| Метод | Эндпоинт | Описание |
-|-------|----------|----------|
-| `GET` | `/products` | Список продуктов с пагинацией |
-| `GET` | `/products/:id` | Получить продукт по ID |
-| `POST` | `/products` | Создать продукт |
-| `PUT` | `/products/:id` | Полное обновление продукта |
-| `PATCH` | `/products/:id` | Частичное обновление продукта |
-| `DELETE` | `/products/:id` | Мягкое удаление продукта |
+| Метод | Эндпоинт | Описание | Статус успеха |
+|-------|----------|----------|---------------|
+| `GET` | `/categories` | Список категорий с пагинацией | `200 OK` |
+| `GET` | `/categories/:id` | Категория по ID | `200 OK` |
+| `POST` | `/categories` | Создать категорию | `201 Created` |
+| `PUT` | `/categories/:id` | Полное обновление категории | `200 OK` |
+| `PATCH` | `/categories/:id` | Частичное обновление категории | `200 OK` |
+| `DELETE` | `/categories/:id` | Мягкое удаление категории | `204 No Content` |
+
+### Продукты (требуют авторизации)
+
+| Метод | Эндпоинт | Описание | Статус успеха |
+|-------|----------|----------|---------------|
+| `GET` | `/products` | Список продуктов с пагинацией | `200 OK` |
+| `GET` | `/products/:id` | Продукт по ID | `200 OK` |
+| `POST` | `/products` | Создать продукт | `201 Created` |
+| `PUT` | `/products/:id` | Полное обновление продукта | `200 OK` |
+| `PATCH` | `/products/:id` | Частичное обновление продукта | `200 OK` |
+| `DELETE` | `/products/:id` | Мягкое удаление продукта | `204 No Content` |
 
 ### Параметры пагинации
-Доступны для эндпоинтов списков (`/categories`, `/products`):
 
 | Параметр | Тип | По умолчанию | Описание |
 |----------|-----|--------------|----------|
 | `page` | integer | `1` | Номер страницы (начинается с 1) |
 | `limit` | integer | `10` | Записей на странице (макс. 100) |
 
-### Формат ответа с пагинацией
 ```json
 {
   "data": [ ... ],
@@ -109,205 +171,46 @@ go run ./app
 }
 ```
 
-## Тестирование API
-
-### 1. Создание категории
-**Запрос:**
-```bash
-curl -X POST http://localhost:4200/categories \
-  -H "Content-Type: application/json" \
-  -d "{\"name\":\"Лицо\",\"description\":\"Уход за лицом\",\"status\":\"active\"}"
-```
-
-**Ожидаемый ответ (201 Created):**
-```json
-{
-  "id": "bdb47a31-1d88-4b9f-88f7-f93fd75bcf32",
-  "name": "Лицо",
-  "description": "Уход за лицом",
-  "status": "active",
-  "createdAt": "2026-03-06T13:40:36.568Z"
-}
-```
-
 ---
-
-### 2. Получение списка категорий (с пагинацией)
-**Запрос:**
-```bash
-curl "http://localhost:4200/categories?page=1&limit=2"
-```
-
-**Ожидаемый ответ (200 OK):**
-```json
-{
-  "data": [
-    {
-      "id": "bdb47a31-1d88-4b9f-88f7-f93fd75bcf32",
-      "name": "Лицо",
-      "description": "Уход за лицом",
-      "status": "active",
-      "createdAt": "2026-03-06T13:40:36.568Z"
-    }
-  ],
-  "meta": {
-    "total": 1,
-    "page": 1,
-    "limit": 2,
-    "totalPages": 1
-  }
-}
-```
-
----
-
-### 3. Получение категории по ID
-**Запрос:**
-```bash
-curl http://localhost:4200/categories/bdb47a31-1d88-4b9f-88f7-f93fd75bcf32
-```
-
-**Ожидаемый ответ (200 OK):**
-```json
-{
-  "id": "bdb47a31-1d88-4b9f-88f7-f93fd75bcf32",
-  "name": "Лицо",
-  "description": "Уход за лицом",
-  "status": "active",
-  "createdAt": "2026-03-06T13:40:36.568Z"
-}
-```
-
----
-
-### 4. Обновление категории (PUT)
-**Запрос:**
-```bash
-curl -X PUT http://localhost:4200/categories/bdb47a31-1d88-4b9f-88f7-f93fd75bcf32 \
-  -H "Content-Type: application/json" \
-  -d "{\"name\":\"Лицо PRO\",\"description\":\"Профессиональный уход\",\"status\":\"active\"}"
-```
-
-**Ожидаемый ответ (200 OK):**
-```json
-{
-  "id": "bdb47a31-1d88-4b9f-88f7-f93fd75bcf32",
-  "name": "Лицо PRO",
-  "description": "Профессиональный уход",
-  "status": "active",
-  "createdAt": "2026-03-06T13:40:36.568Z"
-}
-```
-
----
-
-### 5. Частичное обновление категории (PATCH)
-**Запрос:**
-```bash
-curl -X PATCH http://localhost:4200/categories/bdb47a31-1d88-4b9f-88f7-f93fd75bcf32 \
-  -H "Content-Type: application/json" \
-  -d "{\"status\":\"hidden\"}"
-```
-
-**Ожидаемый ответ (200 OK):**
-```json
-{
-  "id": "bdb47a31-1d88-4b9f-88f7-f93fd75bcf32",
-  "name": "Лицо PRO",
-  "description": "Профессиональный уход",
-  "status": "hidden",
-  "createdAt": "2026-03-06T13:40:36.568Z"
-}
-```
-
----
-
-### 6. Мягкое удаление категории (DELETE)
-**Запрос:**
-```bash
-curl -X DELETE http://localhost:4200/categories/bdb47a31-1d88-4b9f-88f7-f93fd75bcf32
-```
-
-**Ожидаемый ответ (204 No Content):**
-```
-(пустое тело ответа)
-```
-
----
-
-### 7. Проверка мягкого удаления
-**Запрос:**
-```bash
-curl http://localhost:4200/categories/bdb47a31-1d88-4b9f-88f7-f93fd75bcf32
-```
-
-**Ожидаемый ответ (404 Not Found):**
-```json
-{
-  "error": "категория не найдена"
-}
-```
-
----
-
-### 8. Проверка, что удалённая категория не в списке
-**Запрос:**
-```bash
-curl "http://localhost:4200/categories?page=1&limit=10"
-```
-
-**Ожидаемый ответ (200 OK):**
-```json
-{
-  "data": [],
-  "meta": {
-    "total": 0,
-    "page": 1,
-    "limit": 10,
-    "totalPages": 0
-  }
-}
-```
-
-> Примечание: `total: 0` означает, что удалённая категория не учитывается в списке (Soft Delete работает корректно).
 
 ## Миграции
-Миграции применяются **автоматически** при запуске приложения через `docker-compose up --build`.
 
-Файлы миграций находятся в папке `internal/migrations/`:
-- `000001_create_categories_table.up.sql` / `.down.sql`
-- `000002_create_products_table.up.sql` / `.down.sql`
+Применяются **автоматически** при запуске через `docker-compose up --build`.
 
-> Отдельная команда для запуска миграций не требуется — они выполняются в функции `runMigrations()` при старте сервера.
+Файлы миграций в `internal/migrations/`:
+- `000001_create_categories_table`
+- `000002_create_products_table`
+- `000003_create_users_table`
+- `000004_create_refresh_tokens_table`
+- `000005_create_password_reset_tokens_table`
 
-### Критерии приемки
-1.  Репозиторий: Код загружен на GitHub/GitLab.
-2.  Документация: Файл `README.md` содержит:
-    -   Краткое описание проекта.
-    -   Инструкция по запуску через `docker-compose up --build`.
-    -   Пример файла переменных окружения (`.env.example`).
-    -   Описание API (список эндпоинтов и параметров пагинации).
-    -   Инструкция по запуску миграций (если требуется отдельная команда).
-3.  Функциональность:
-    -   Все 6 HTTP методов работают корректно.
-    -   Реализовано мягкое удаление (запись не исчезает из БД после DELETE).
-    -   Реализована пагинация (запрос с разными `page` возвращает разные данные).
-    -   Запросы на получение не возвращают удаленные записи.
-4.  Код и Инфраструктура:
-    -   Соблюдена модульная структура.
-    -   Присутствует валидация данных.
-    -   Используются переменные окружения.
-    -   В репозитории присутствуют файлы миграций.
-    -   Приложение успешно развертывается на чистой базе данных с применением миграций.
-### Контрольные вопросы
-1.  В чем заключается основная концепция REST?
-2.  Какие HTTP-методы являются идемпотентными? Почему это важно для надежности API?
-3.  В чем семантическая разница между методами `PUT` и `PATCH`?
-4.  Какие коды состояния HTTP следует возвращать при успешном создании ресурса, успешном удалении и ошибке валидации данных?
-5.  Что такое Soft Delete? Какие преимущества и недостатки оно имеет по сравнению с физическим удалением (Hard Delete)?
-6.  Зачем нужна пагинация данных в API? Какие существуют основные типы пагинации (offset-based, cursor-based)?
-7.  Зачем использовать DTO (Data Transfer Objects) вместо передачи сущностей базы данных напрямую в контроллер?
-8.  Какие преимущества дает использование ORM по сравнению с написанием "сырых" SQL-запросов?
-9.  Как обеспечить безопасность чувствительных данных (пароли от БД) при контейнеризации приложения?
-10. Что такое `healthcheck` в Docker Compose и зачем он нужен в связке приложений?
+Отдельная команда не требуется — миграции запускаются в `runMigrations()` при старте сервера.
 
+---
+
+## Тестирование API через curl
+
+### Регистрация
+```bash
+curl -X POST http://localhost:4200/auth/register \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"test@example.com\",\"password\":\"SecurePass123!\",\"phone\":\"+79991234567\"}"
+```
+
+### Вход
+```bash
+curl -X POST http://localhost:4200/auth/login \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"test@example.com\",\"password\":\"SecurePass123!\"}" \
+  -c cookies.txt
+```
+
+### Проверка авторизации
+```bash
+curl http://localhost:4200/auth/whoami -b cookies.txt
+```
+
+### Список категорий
+```bash
+curl http://localhost:4200/categories -b cookies.txt
+```
