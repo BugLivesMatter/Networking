@@ -29,6 +29,13 @@ RESTful API на Go (Gin + PostgreSQL) с полным циклом аутент
 - Настроена схема безопасности `CookieAuth` (apiKey в cookie `access_token`)
 - Чувствительные поля (пароли, соли, хеши токенов) исключены из схем ответов
 
+**Лабораторная работа №5 — Redis кеш и сессии:**
+- Добавлен Redis в `docker-compose` с обязательным паролем (`REDIS_PASSWORD`)
+- Cache-Aside кеширование списков `GET /products` и `GET /categories`
+- Кеширование профиля `GET /auth/whoami`
+- Инвалидация кеша при `POST/PUT/PATCH/DELETE` для ресурсов
+- Хранение `JTI` access-токена в Redis для мгновенной инвалидации сессии
+
 ---
 
 ## Быстрый старт
@@ -70,6 +77,13 @@ YANDEX_CLIENT_ID=your_yandex_client_id
 YANDEX_CLIENT_SECRET=your_yandex_client_secret
 YANDEX_CALLBACK_URL=http://localhost:4200/auth/oauth/yandex/callback
 
+# === Redis / Cache ===
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=redis_secure_password_change_in_prod
+CACHE_TTL_DEFAULT=300
+CACHE_ENABLED=true
+
 # === App environment ===
 APP_ENV=development
 ```
@@ -95,6 +109,32 @@ docker-compose down
 ```bash
 docker-compose down -v
 ```
+
+---
+
+## Redis: практическая проверка кеша
+
+Подключение к Redis-контейнеру:
+
+```bash
+docker exec -it wp_labs_redis redis-cli -a <REDIS_PASSWORD>
+```
+
+Полезные команды:
+
+```bash
+KEYS 'wp:*'
+GET wp:products:list:page:1:limit:10
+TTL wp:products:list:page:1:limit:10
+DEL wp:products:list:page:1:limit:10
+UNLINK wp:products:list:*
+```
+
+Проверка инвалидации сессии:
+- Выполнить вход и получить `access_token`
+- Убедиться, что появился ключ вида `wp:auth:user:<userId>:access:<jti>`
+- Выполнить `POST /auth/logout`
+- Повторный вызов защищенного эндпоинта с прежним access token должен вернуть `401`
 
 ---
 
