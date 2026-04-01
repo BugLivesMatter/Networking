@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -27,6 +28,13 @@ type Config struct {
 	YandexClientID     string
 	YandexClientSecret string
 	YandexCallbackURL  string
+
+	// Redis и кеш
+	RedisHost       string
+	RedisPort       int
+	RedisPassword   string
+	CacheTTLDefault time.Duration
+	CacheEnabled    bool
 }
 
 func Load() (*Config, error) {
@@ -34,6 +42,9 @@ func Load() (*Config, error) {
 
 	port, _ := strconv.Atoi(getEnv("PORT", "4200"))
 	dbPort, _ := strconv.Atoi(getEnv("DB_PORT", "5432"))
+	redisPort, _ := strconv.Atoi(getEnv("REDIS_PORT", "6379"))
+	cacheTTLSeconds, _ := strconv.Atoi(getEnv("CACHE_TTL_DEFAULT", "300"))
+	cacheEnabled, _ := strconv.ParseBool(getEnv("CACHE_ENABLED", "true"))
 
 	cfg := &Config{
 		DBHost:     getEnv("DB_HOST", "localhost"),
@@ -54,6 +65,13 @@ func Load() (*Config, error) {
 		YandexClientID:     getEnv("YANDEX_CLIENT_ID", ""),
 		YandexClientSecret: getEnv("YANDEX_CLIENT_SECRET", ""),
 		YandexCallbackURL:  getEnv("YANDEX_CALLBACK_URL", ""),
+
+		// Redis и кеш
+		RedisHost:       getEnv("REDIS_HOST", "localhost"),
+		RedisPort:       redisPort,
+		RedisPassword:   getEnv("REDIS_PASSWORD", ""),
+		CacheTTLDefault: time.Duration(cacheTTLSeconds) * time.Second,
+		CacheEnabled:    cacheEnabled,
 	}
 	return cfg, nil
 }
