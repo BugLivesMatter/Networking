@@ -3,10 +3,12 @@ package service
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/lab2/rest-api/internal/cache"
 	"github.com/lab2/rest-api/internal/category/domain"
 	"github.com/lab2/rest-api/internal/category/dto"
 	categoryrepo "github.com/lab2/rest-api/internal/category/repository"
@@ -27,10 +29,22 @@ type CategoryService interface {
 type categoryService struct {
 	repo        categoryrepo.CategoryRepository
 	productRepo productrepo.ProductRepository
+	cacheSvc    cache.Service
+	cacheTTL    time.Duration
 }
 
-func NewCategoryService(repo categoryrepo.CategoryRepository, productRepo productrepo.ProductRepository) CategoryService {
-	return &categoryService{repo: repo, productRepo: productRepo}
+func NewCategoryService(
+	repo categoryrepo.CategoryRepository,
+	productRepo productrepo.ProductRepository,
+	cacheSvc cache.Service,
+	cacheTTL time.Duration,
+) CategoryService {
+	return &categoryService{
+		repo:        repo,
+		productRepo: productRepo,
+		cacheSvc:    cacheSvc,
+		cacheTTL:    cacheTTL,
+	}
 }
 
 func (s *categoryService) Create(ctx context.Context, req *dto.CreateCategoryRequest) (*domain.Category, error) {
@@ -46,6 +60,7 @@ func (s *categoryService) Create(ctx context.Context, req *dto.CreateCategoryReq
 	if err := s.repo.Create(ctx, category); err != nil {
 		return nil, err
 	}
+	_ = s.cacheSvc.DelByPattern(ctx, cache.CategoriesListPattern())
 	return category, nil
 }
 
@@ -71,6 +86,18 @@ func (s *categoryService) List(ctx context.Context, page, limit int) ([]domain.C
 		limit = pagination.MaxLimit
 	}
 	offset := (page - 1) * limit
+	cacheKey := cache.CategoriesListKey(page, limit)
+	type cachedList struct {
+		Categories []domain.Category `json:"categories"`
+		Total      int64             `json:"total"`
+		TotalPages int               `json:"total_pages"`
+	}
+	var cached cachedList
+	hit, err := s.cacheSvc.Get(ctx, cacheKey, &cached)
+	if err == nil && hit {
+		return cached.Categories, cached.Total, cached.TotalPages, nil
+	}
+
 	categories, total, err := s.repo.List(ctx, offset, limit)
 	if err != nil {
 		return nil, 0, 0, err
@@ -79,6 +106,11 @@ func (s *categoryService) List(ctx context.Context, page, limit int) ([]domain.C
 	if int(total)%limit > 0 {
 		totalPages++
 	}
+	_ = s.cacheSvc.Set(ctx, cacheKey, cachedList{
+		Categories: categories,
+		Total:      total,
+		TotalPages: totalPages,
+	}, s.cacheTTL)
 	return categories, total, totalPages, nil
 }
 
@@ -96,6 +128,7 @@ func (s *categoryService) Update(ctx context.Context, id uuid.UUID, req *dto.Upd
 	if err := s.repo.Update(ctx, category); err != nil {
 		return nil, err
 	}
+	_ = s.cacheSvc.DelByPattern(ctx, cache.CategoriesListPattern())
 	return category, nil
 }
 
@@ -119,6 +152,7 @@ func (s *categoryService) Patch(ctx context.Context, id uuid.UUID, req *dto.Patc
 	if err := s.repo.Update(ctx, category); err != nil {
 		return nil, err
 	}
+	_ = s.cacheSvc.DelByPattern(ctx, cache.CategoriesListPattern())
 	return category, nil
 }
 
@@ -137,5 +171,9 @@ func (s *categoryService) Delete(ctx context.Context, id uuid.UUID) error {
 	if count > 0 {
 		return apperror.ErrConflict
 	}
-	return s.repo.Delete(ctx, id)
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return err
+	}
+	_ = s.cacheSvc.DelByPattern(ctx, cache.CategoriesListPattern())
+	return nil
 }

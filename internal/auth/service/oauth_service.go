@@ -17,6 +17,7 @@ import (
 	"github.com/lab2/rest-api/internal/auth/domain"
 	"github.com/lab2/rest-api/internal/auth/dto"
 	"github.com/lab2/rest-api/internal/auth/repository"
+	"github.com/lab2/rest-api/internal/cache"
 )
 
 // OAuthService определяет интерфейс для OAuth авторизации
@@ -31,6 +32,8 @@ type oauthServiceImpl struct {
 	tokenRepo repository.TokenRepository
 	passSvc   PasswordService
 	jwtSvc    JWTService
+	cacheSvc  cache.Service
+	cacheTTL  time.Duration
 	config    *OAuthConfig
 }
 
@@ -47,6 +50,8 @@ func NewOAuthService(
 	tokenRepo repository.TokenRepository,
 	passSvc PasswordService,
 	jwtSvc JWTService,
+	cacheSvc cache.Service,
+	cacheTTL time.Duration,
 	config *OAuthConfig,
 ) OAuthService {
 	return &oauthServiceImpl{
@@ -54,6 +59,8 @@ func NewOAuthService(
 		tokenRepo: tokenRepo,
 		passSvc:   passSvc,
 		jwtSvc:    jwtSvc,
+		cacheSvc:  cacheSvc,
+		cacheTTL:  cacheTTL,
 		config:    config,
 	}
 }
@@ -133,7 +140,7 @@ func (s *oauthServiceImpl) handleYandexCallback(ctx context.Context, code, state
 	}
 
 	// 5. Генерируем JWT токены
-	accessToken, accessExpiry, err := s.jwtSvc.GenerateAccessToken(user.ID)
+	accessToken, accessExpiry, accessJTI, err := s.jwtSvc.GenerateAccessToken(user.ID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
@@ -158,6 +165,7 @@ func (s *oauthServiceImpl) handleYandexCallback(ctx context.Context, code, state
 	if err := s.tokenRepo.Create(ctx, token); err != nil {
 		return nil, nil, fmt.Errorf("failed to save refresh token: %w", err)
 	}
+	_ = s.cacheSvc.Set(ctx, cache.UserAccessJTIKey(user.ID, accessJTI), "valid", accessExpiry)
 
 	tokens := &dto.TokensResponse{
 		AccessToken:      accessToken,

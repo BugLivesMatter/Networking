@@ -17,7 +17,7 @@ type Claims struct {
 
 // JWTService определяет интерфейс для работы с JWT токенами
 type JWTService interface {
-	GenerateAccessToken(userID uuid.UUID) (string, time.Duration, error)
+	GenerateAccessToken(userID uuid.UUID) (string, time.Duration, string, error)
 	GenerateRefreshToken(userID uuid.UUID) (string, time.Duration, error)
 	ValidateAccessToken(tokenString string) (*Claims, error)
 	ValidateRefreshToken(tokenString string) (*Claims, error)
@@ -42,10 +42,12 @@ func NewJWTService(accessSecret, refreshSecret string, accessExpiry, refreshExpi
 }
 
 // GenerateAccessToken генерирует Access токен с коротким временем жизни
-func (s *jwtServiceImpl) GenerateAccessToken(userID uuid.UUID) (string, time.Duration, error) {
+func (s *jwtServiceImpl) GenerateAccessToken(userID uuid.UUID) (string, time.Duration, string, error) {
+	jti := uuid.NewString()
 	claims := &Claims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        jti,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.accessExpiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
@@ -55,10 +57,10 @@ func (s *jwtServiceImpl) GenerateAccessToken(userID uuid.UUID) (string, time.Dur
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(s.accessSecret)
 	if err != nil {
-		return "", 0, fmt.Errorf("failed to sign access token: %w", err)
+		return "", 0, "", fmt.Errorf("failed to sign access token: %w", err)
 	}
 
-	return tokenString, s.accessExpiry, nil
+	return tokenString, s.accessExpiry, jti, nil
 }
 
 // GenerateRefreshToken генерирует Refresh токен с длительным временем жизни

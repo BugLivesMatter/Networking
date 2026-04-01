@@ -3,10 +3,12 @@ package service
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/lab2/rest-api/internal/cache"
 	categoryrepo "github.com/lab2/rest-api/internal/category/repository"
 	"github.com/lab2/rest-api/internal/product/domain"
 	"github.com/lab2/rest-api/internal/product/dto"
@@ -64,13 +66,25 @@ type ProductService interface {
 type productService struct {
 	repo         productrepo.ProductRepository
 	categoryRepo categoryrepo.CategoryRepository
+	cacheSvc     cache.Service
+	cacheTTL     time.Duration
 }
 
 // NewProductService создаёт новый экземпляр ProductService.
 // repo — репозиторий продуктов.
 // categoryRepo — репозиторий категорий (используется для проверки categoryID).
-func NewProductService(repo productrepo.ProductRepository, categoryRepo categoryrepo.CategoryRepository) ProductService {
-	return &productService{repo: repo, categoryRepo: categoryRepo}
+func NewProductService(
+	repo productrepo.ProductRepository,
+	categoryRepo categoryrepo.CategoryRepository,
+	cacheSvc cache.Service,
+	cacheTTL time.Duration,
+) ProductService {
+	return &productService{
+		repo:         repo,
+		categoryRepo: categoryRepo,
+		cacheSvc:     cacheSvc,
+		cacheTTL:     cacheTTL,
+	}
 }
 
 // Create создаёт новый продукт в БД.
@@ -103,6 +117,7 @@ func (s *productService) Create(ctx context.Context, req *dto.CreateProductReque
 	if err := s.repo.Create(ctx, product); err != nil {
 		return nil, err
 	}
+	_ = s.cacheSvc.DelByPattern(ctx, cache.ProductsListPattern())
 	// Перечитываем, чтобы получить связанную категорию через Preload
 	product, _ = s.repo.GetByID(ctx, product.ID)
 	return product, nil
@@ -136,6 +151,22 @@ func (s *productService) List(ctx context.Context, page, limit int, categoryID *
 		limit = pagination.MaxLimit
 	}
 	offset := (page - 1) * limit
+	categoryPart := ""
+	if categoryID != nil {
+		categoryPart = categoryID.String()
+	}
+	cacheKey := cache.ProductsListKey(page, limit, categoryPart)
+	type cachedList struct {
+		Products   []domain.Product `json:"products"`
+		Total      int64            `json:"total"`
+		TotalPages int              `json:"total_pages"`
+	}
+	var cached cachedList
+	hit, err := s.cacheSvc.Get(ctx, cacheKey, &cached)
+	if err == nil && hit {
+		return cached.Products, cached.Total, cached.TotalPages, nil
+	}
+
 	products, total, err := s.repo.List(ctx, offset, limit, categoryID)
 	if err != nil {
 		return nil, 0, 0, err
@@ -144,6 +175,11 @@ func (s *productService) List(ctx context.Context, page, limit int, categoryID *
 	if int(total)%limit > 0 {
 		totalPages++
 	}
+	_ = s.cacheSvc.Set(ctx, cacheKey, cachedList{
+		Products:   products,
+		Total:      total,
+		TotalPages: totalPages,
+	}, s.cacheTTL)
 	return products, total, totalPages, nil
 }
 
@@ -177,6 +213,7 @@ func (s *productService) Update(ctx context.Context, id uuid.UUID, req *dto.Upda
 	if err := s.repo.Update(ctx, product); err != nil {
 		return nil, err
 	}
+	_ = s.cacheSvc.DelByPattern(ctx, cache.ProductsListPattern())
 	product, _ = s.repo.GetByID(ctx, id)
 	return product, nil
 }
@@ -221,6 +258,7 @@ func (s *productService) Patch(ctx context.Context, id uuid.UUID, req *dto.Patch
 	if err := s.repo.Update(ctx, product); err != nil {
 		return nil, err
 	}
+	_ = s.cacheSvc.DelByPattern(ctx, cache.ProductsListPattern())
 	product, _ = s.repo.GetByID(ctx, id)
 	return product, nil
 }
@@ -236,5 +274,9 @@ func (s *productService) Delete(ctx context.Context, id uuid.UUID) error {
 		}
 		return err
 	}
-	return s.repo.Delete(ctx, id)
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return err
+	}
+	_ = s.cacheSvc.DelByPattern(ctx, cache.ProductsListPattern())
+	return nil
 }

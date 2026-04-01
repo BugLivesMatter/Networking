@@ -12,6 +12,7 @@ import (
 	"github.com/lab2/rest-api/internal/auth/domain"
 	"github.com/lab2/rest-api/internal/auth/dto"
 	"github.com/lab2/rest-api/internal/auth/repository"
+	"github.com/lab2/rest-api/internal/cache"
 )
 
 // AuthService определяет интерфейс для бизнес-логики авторизации
@@ -19,7 +20,7 @@ type AuthService interface {
 	Register(ctx context.Context, req *dto.RegisterRequest) (*domain.User, error)
 	Login(ctx context.Context, email, password string) (*dto.TokensResponse, error)
 	Refresh(ctx context.Context, refreshToken string) (*dto.TokensResponse, error)
-	Logout(ctx context.Context, refreshToken string) error
+	Logout(ctx context.Context, refreshToken, accessToken string) error
 	LogoutAll(ctx context.Context, userID uuid.UUID) error
 	GetUserByID(ctx context.Context, userID uuid.UUID) (*domain.UserResponse, error)
 	ForgotPassword(ctx context.Context, email string) error
@@ -33,6 +34,8 @@ type authServiceImpl struct {
 	passSvc        PasswordService
 	jwtSvc         JWTService
 	resetTokenRepo repository.PasswordResetRepository
+	cacheSvc       cache.Service
+	cacheTTL       time.Duration
 }
 
 // NewAuthService создаёт новый экземпляр сервиса авторизации
@@ -42,6 +45,8 @@ func NewAuthService(
 	passSvc PasswordService,
 	jwtSvc JWTService,
 	resetTokenRepo repository.PasswordResetRepository,
+	cacheSvc cache.Service,
+	cacheTTL time.Duration,
 ) AuthService {
 	return &authServiceImpl{
 		userRepo:       userRepo,
@@ -49,6 +54,8 @@ func NewAuthService(
 		passSvc:        passSvc,
 		jwtSvc:         jwtSvc,
 		resetTokenRepo: resetTokenRepo,
+		cacheSvc:       cacheSvc,
+		cacheTTL:       cacheTTL,
 	}
 }
 
@@ -107,7 +114,7 @@ func (s *authServiceImpl) Login(ctx context.Context, email, password string) (*d
 	}
 
 	// Генерация JWT токенов
-	accessToken, accessExpiry, err := s.jwtSvc.GenerateAccessToken(user.ID)
+	accessToken, accessExpiry, accessJTI, err := s.jwtSvc.GenerateAccessToken(user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
@@ -134,6 +141,7 @@ func (s *authServiceImpl) Login(ctx context.Context, email, password string) (*d
 	if err := s.tokenRepo.Create(ctx, token); err != nil {
 		return nil, fmt.Errorf("failed to save refresh token: %w", err)
 	}
+	_ = s.cacheSvc.Set(ctx, cache.UserAccessJTIKey(user.ID, accessJTI), "valid", accessExpiry)
 
 	// ВОЗВРАЩАЕМ ТОКЕНЫ!
 	return &dto.TokensResponse{
@@ -175,7 +183,7 @@ func (s *authServiceImpl) Refresh(ctx context.Context, refreshToken string) (*dt
 	}
 
 	// Генерация новой пары токенов
-	accessToken, accessExpiry, err := s.jwtSvc.GenerateAccessToken(claims.UserID)
+	accessToken, accessExpiry, accessJTI, err := s.jwtSvc.GenerateAccessToken(claims.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
@@ -200,6 +208,7 @@ func (s *authServiceImpl) Refresh(ctx context.Context, refreshToken string) (*dt
 	if err := s.tokenRepo.Create(ctx, newToken); err != nil {
 		return nil, fmt.Errorf("failed to save new refresh token: %w", err)
 	}
+	_ = s.cacheSvc.Set(ctx, cache.UserAccessJTIKey(claims.UserID, accessJTI), "valid", accessExpiry)
 
 	return &dto.TokensResponse{
 		AccessToken:      accessToken,
@@ -210,18 +219,42 @@ func (s *authServiceImpl) Refresh(ctx context.Context, refreshToken string) (*dt
 }
 
 // Logout завершает текущую сессию (отзывает один токен)
-func (s *authServiceImpl) Logout(ctx context.Context, refreshToken string) error {
+func (s *authServiceImpl) Logout(ctx context.Context, refreshToken, accessToken string) error {
 	tokenHash := hashToken(refreshToken)
-	return s.tokenRepo.Revoke(ctx, tokenHash)
+	if err := s.tokenRepo.Revoke(ctx, tokenHash); err != nil {
+		return err
+	}
+
+	if accessToken != "" {
+		claims, err := s.jwtSvc.ValidateAccessToken(accessToken)
+		if err == nil && claims.ID != "" {
+			_ = s.cacheSvc.Del(ctx, cache.UserAccessJTIKey(claims.UserID, claims.ID))
+			_ = s.cacheSvc.Del(ctx, cache.UserProfileKey(claims.UserID))
+		}
+	}
+
+	return nil
 }
 
 // LogoutAll завершает все сессии пользователя
 func (s *authServiceImpl) LogoutAll(ctx context.Context, userID uuid.UUID) error {
-	return s.tokenRepo.RevokeAll(ctx, userID)
+	if err := s.tokenRepo.RevokeAll(ctx, userID); err != nil {
+		return err
+	}
+	_ = s.cacheSvc.DelByPattern(ctx, cache.UserAccessJTIPattern(userID))
+	_ = s.cacheSvc.Del(ctx, cache.UserProfileKey(userID))
+	return nil
 }
 
 // GetUserByID возвращает данные пользователя по ID (без чувствительных полей)
 func (s *authServiceImpl) GetUserByID(ctx context.Context, userID uuid.UUID) (*domain.UserResponse, error) {
+	var cached domain.UserResponse
+	cacheKey := cache.UserProfileKey(userID)
+	hit, err := s.cacheSvc.Get(ctx, cacheKey, &cached)
+	if err == nil && hit {
+		return &cached, nil
+	}
+
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
@@ -230,8 +263,9 @@ func (s *authServiceImpl) GetUserByID(ctx context.Context, userID uuid.UUID) (*d
 		return nil, errors.New("пользователь не найден")
 	}
 
-	// ToResponse() возвращает *UserResponse — просто возвращаем
-	return user.ToResponse(), nil
+	resp := user.ToResponse()
+	_ = s.cacheSvc.Set(ctx, cacheKey, resp, s.cacheTTL)
+	return resp, nil
 }
 
 // ForgotPassword генерирует токен сброса пароля и отправляет его на email

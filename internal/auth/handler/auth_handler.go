@@ -227,7 +227,8 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		return
 	}
 
-	if err := h.authService.Logout(c.Request.Context(), refreshToken); err != nil {
+	accessToken, _ := c.Cookie("access_token")
+	if err := h.authService.Logout(c.Request.Context(), refreshToken, accessToken); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ошибка при выходе"})
 		return
 	}

@@ -9,18 +9,20 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	_ "github.com/lab2/rest-api/docs"
+	"github.com/lab2/rest-api/internal/config"
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
-	"github.com/lab2/rest-api/internal/config"
-	_ "github.com/lab2/rest-api/docs"
 
 	//"github.com/lab2/rest-api/internal/domain"
+	"github.com/lab2/rest-api/internal/cache"
 	categoryhandler "github.com/lab2/rest-api/internal/category/handler"
 	categoryrepo "github.com/lab2/rest-api/internal/category/repository"
 	categorysvc "github.com/lab2/rest-api/internal/category/service"
@@ -84,6 +86,11 @@ func main() {
 	// Репозитории
 	userRepo := authrepo.NewUserRepository(db)
 	tokenRepo := authrepo.NewTokenRepository(db)
+	cacheClient, cacheErr := cache.NewRedisClient(context.Background(), cfg.RedisHost, cfg.RedisPort, cfg.RedisPassword)
+	if cacheErr != nil {
+		log.Printf("Redis недоступен, продолжаем без кеша: %v", cacheErr)
+	}
+	cacheService := cache.NewService(cacheClient, cfg.CacheEnabled)
 
 	// Сервисы
 	passwordService := authservice.NewPasswordService()
@@ -106,6 +113,8 @@ func main() {
 		passwordService,
 		jwtService,
 		passwordResetRepo,
+		cacheService,
+		cfg.CacheTTLDefault,
 	)
 
 	// Хендлер
@@ -126,6 +135,8 @@ func main() {
 		tokenRepo,
 		passwordService,
 		jwtService,
+		cacheService,
+		cfg.CacheTTLDefault,
 		oauthConfig,
 	)
 
@@ -133,7 +144,7 @@ func main() {
 	oauthHandler := authhandler.NewOAuthHandler(oauthService)
 
 	// Middleware
-	authMW := authmiddleware.AuthMiddleware(jwtService, tokenRepo)
+	authMW := authmiddleware.AuthMiddleware(jwtService, tokenRepo, cacheService)
 	/*
 		if err := db.AutoMigrate(&domain.Category{}, &domain.Product{}); err != nil {
 			log.Fatalf("migrate: %v", err)
@@ -141,8 +152,8 @@ func main() {
 	*/
 	categoryRepo := categoryrepo.NewCategoryRepository(db)
 	productRepo := productrepo.NewProductRepository(db)
-	categorySvc := categorysvc.NewCategoryService(categoryRepo, productRepo)
-	productSvc := productsvc.NewProductService(productRepo, categoryRepo)
+	categorySvc := categorysvc.NewCategoryService(categoryRepo, productRepo, cacheService, cfg.CacheTTLDefault)
+	productSvc := productsvc.NewProductService(productRepo, categoryRepo, cacheService, cfg.CacheTTLDefault)
 	categoryHandler := categoryhandler.NewCategoryHandler(categorySvc)
 	productHandler := producthandler.NewProductHandler(productSvc)
 

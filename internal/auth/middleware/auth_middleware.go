@@ -3,12 +3,14 @@ package middleware
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/lab2/rest-api/internal/auth/repository"
 	"github.com/lab2/rest-api/internal/auth/service"
+	"github.com/lab2/rest-api/internal/cache"
 )
 
 // AuthMiddleware проверяет access token при каждом запросе к защищённым эндпоинтам.
@@ -16,7 +18,7 @@ import (
 //  1. Криптографическая валидация подписи и срока действия JWT.
 //  2. Проверка по БД — хэш access token должен существовать в активной (не отозванной) сессии.
 //     Это гарантирует мгновенную инвалидацию токена после logout.
-func AuthMiddleware(jwtService service.JWTService, tokenRepo repository.TokenRepository) gin.HandlerFunc {
+func AuthMiddleware(jwtService service.JWTService, tokenRepo repository.TokenRepository, cacheSvc cache.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 1. Извлекаем access token из HttpOnly cookie
 		tokenString, err := c.Cookie("access_token")
@@ -34,6 +36,20 @@ func AuthMiddleware(jwtService service.JWTService, tokenRepo repository.TokenRep
 				"error": "невалидный или истёкший токен",
 			})
 			return
+		}
+
+		// 2.1 Проверяем наличие JTI в Redis (если кеш доступен).
+		if claims.ID != "" {
+			exists, err := cacheSvc.Exists(c.Request.Context(), cache.UserAccessJTIKey(claims.UserID, claims.ID))
+			if err == nil && !exists {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"error": "сессия неактивна, выполните вход повторно",
+				})
+				return
+			}
+			if err != nil {
+				log.Printf("auth middleware: Redis недоступен, продолжаем проверку через БД: %v", err)
+			}
 		}
 
 		// 3. Хэшируем токен и ищем его в БД.
