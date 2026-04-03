@@ -158,6 +158,7 @@ func (s *oauthServiceImpl) handleYandexCallback(ctx context.Context, code, state
 		UserID:          user.ID,
 		TokenHash:       refreshTokenHash,
 		AccessTokenHash: accessTokenHash,
+		AccessJTI:       accessJTI,
 		ExpiresAt:       time.Now().Add(refreshExpiry),
 		Revoked:         false,
 	}

@@ -134,6 +134,7 @@ func (s *authServiceImpl) Login(ctx context.Context, email, password string) (*d
 		UserID:          user.ID,
 		TokenHash:       refreshTokenHash,
 		AccessTokenHash: accessTokenHash,
+		AccessJTI:       accessJTI,
 		ExpiresAt:       time.Now().Add(refreshExpiry),
 		Revoked:         false,
 	}
@@ -177,6 +178,10 @@ func (s *authServiceImpl) Refresh(ctx context.Context, refreshToken string) (*dt
 		return nil, errors.New("токен отозван или истёк")
 	}
 
+	if storedToken.AccessJTI != "" {
+		_ = s.cacheSvc.Del(ctx, cache.UserAccessJTIKey(storedToken.UserID, storedToken.AccessJTI))
+	}
+
 	// Отзыв старого токена
 	if err := s.tokenRepo.Revoke(ctx, tokenHash); err != nil {
 		return nil, fmt.Errorf("failed to revoke old token: %w", err)
@@ -201,6 +206,7 @@ func (s *authServiceImpl) Refresh(ctx context.Context, refreshToken string) (*dt
 		UserID:          claims.UserID,
 		TokenHash:       newTokenHash,
 		AccessTokenHash: newAccessTokenHash,
+		AccessJTI:       accessJTI,
 		ExpiresAt:       time.Now().Add(refreshExpiry),
 		Revoked:         false,
 	}
