@@ -13,6 +13,7 @@ type RefreshToken struct {
 	UserID          uuid.UUID `gorm:"type:uuid;not null" json:"userId"`
 	TokenHash       string    `gorm:"type:text;not null;uniqueIndex" json:"-"`
 	AccessTokenHash string    `gorm:"type:text;uniqueIndex" json:"-"`
+	AccessJTI       string    `gorm:"type:text" json:"-"` // jti access для Del в Redis при refresh
 	ExpiresAt       time.Time `gorm:"type:timestamptz;not null" json:"expiresAt"`
 	Revoked         bool      `gorm:"default:false" json:"revoked"`
 	CreatedAt       time.Time `gorm:"type:timestamptz;default:now()" json:"createdAt"`
