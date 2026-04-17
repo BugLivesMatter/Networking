@@ -2276,12 +2276,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.0",
+	Version:          "1.1",
 	Host:             "localhost:4200",
 	BasePath:         "/",
 	Schemes:          []string{},
-	Title:            "Lab 2-4 REST API",
-	Description:      "REST API для управления категориями и продуктами с JWT и OAuth2 авторизацией.",
+	Title:            "Lab 2–5 REST API",
+	Description:      "REST API: категории и продукты (CRUD), JWT + OAuth2, Redis (кеш списков и профиля, JTI access в Redis), health-эндпоинты для мониторинга Redis и диагностики латентности БД vs кеша.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

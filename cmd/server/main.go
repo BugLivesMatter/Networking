@@ -1,6 +1,6 @@
-// @title Lab 2-4 REST API
-// @version 1.0
-// @description REST API для управления категориями и продуктами с JWT и OAuth2 авторизацией.
+// @title Lab 2–5 REST API
+// @version 1.1
+// @description REST API: категории и продукты (CRUD), JWT + OAuth2, Redis (кеш списков и профиля, JTI access в Redis), health-эндпоинты для мониторинга Redis и диагностики латентности БД vs кеша.
 // @host localhost:4200
 // @BasePath /
 // @securityDefinitions.apikey CookieAuth
