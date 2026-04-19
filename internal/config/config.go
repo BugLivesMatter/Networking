@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -10,13 +9,10 @@ import (
 )
 
 type Config struct {
-	DBHost     string
-	DBPort     int
-	DBUser     string
-	DBPassword string
-	DBName     string
-	Port       int
-	AppEnv     string
+	MongoURI    string
+	MongoDBName string
+	Port        int
+	AppEnv      string
 
 	// JWT конфигурация
 	JWTAccessSecret      string
@@ -41,19 +37,15 @@ func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	port, _ := strconv.Atoi(getEnv("PORT", "4200"))
-	dbPort, _ := strconv.Atoi(getEnv("DB_PORT", "5432"))
 	redisPort, _ := strconv.Atoi(getEnv("REDIS_PORT", "6379"))
 	cacheTTLSeconds, _ := strconv.Atoi(getEnv("CACHE_TTL_DEFAULT", "300"))
 	cacheEnabled, _ := strconv.ParseBool(getEnv("CACHE_ENABLED", "true"))
 
 	cfg := &Config{
-		DBHost:     getEnv("DB_HOST", "localhost"),
-		DBPort:     dbPort,
-		DBUser:     getEnv("DB_USER", "student"),
-		DBPassword: getEnv("DB_PASSWORD", ""),
-		DBName:     getEnv("DB_NAME", "wp_labs"),
-		Port:       port,
-		AppEnv:     getEnv("APP_ENV", "development"),
+		MongoURI:    getEnv("MONGO_URI", "mongodb://localhost:27017"),
+		MongoDBName: getEnv("MONGO_DB_NAME", "wp_labs"),
+		Port:        port,
+		AppEnv:      getEnv("APP_ENV", "development"),
 
 		// JWT
 		JWTAccessSecret:      getEnv("JWT_ACCESS_SECRET", ""),
@@ -76,28 +68,9 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-func (c *Config) DSN() string {
-	return fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		c.DBHost, c.DBPort, c.DBUser, c.DBPassword, c.DBName,
-	)
-}
-
 func getEnv(key, defaultVal string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
 	}
 	return defaultVal
-}
-
-// MigrationDSN возвращает строку подключения в формате URL для golang-migrate
-// Формат: postgres://user:password@host:port/dbname?sslmode=disable
-func (c *Config) MigrationDSN() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
-		c.DBUser,
-		c.DBPassword,
-		c.DBHost,
-		c.DBPort,
-		c.DBName,
-	)
 }

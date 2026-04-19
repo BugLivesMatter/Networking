@@ -1,20 +1,20 @@
 services:
-  postgres:
-    image: postgres:16
-    container_name: wp_labs_db
+  mongodb:
+    image: mongo:7
+    container_name: wp_labs_mongo
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USER:-student}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-student}
-      POSTGRES_DB: ${DB_NAME:-wp_labs}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-secret}
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-wp_labs}
     ports:
-      - "5432:5432"
+      - "27017:27017"
     volumes:
-      - wp_labs_postgres:/var/lib/postgresql/data
+      - wp_labs_mongo:/data/db
     networks:
       - wp_labs_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-student} -d ${DB_NAME:-wp_labs}"]
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -41,11 +41,8 @@ services:
     container_name: wp_labs_app
     restart: unless-stopped
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${DB_USER:-student}
-      DB_PASSWORD: ${DB_PASSWORD:-student}
-      DB_NAME: ${DB_NAME:-wp_labs}
+      MONGO_URI: ${MONGO_URI:-mongodb://admin:secret@mongodb:27017/wp_labs?authSource=admin}
+      MONGO_DB_NAME: ${MONGO_DB_NAME:-wp_labs}
       PORT: 4200
       APP_ENV: ${APP_ENV:-development}
       # JWT конфигурация
@@ -53,7 +50,6 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
-      
       # OAuth2 Yandex
       YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID}
       YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET}
@@ -66,7 +62,7 @@ services:
     ports:
       - "4200:4200"
     depends_on:
-      postgres:
+      mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -74,7 +70,7 @@ services:
       - wp_labs_network
 
 volumes:
-  wp_labs_postgres:
+  wp_labs_mongo:
   wp_labs_redis:
 
 networks:

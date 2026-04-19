@@ -445,12 +445,11 @@ definitions:
     type: object
   health.DiagnosisComparison:
     properties:
-      postgresqlMs:
+      mongodbMs:
         type: number
-      redisFasterThanPostgresPercent:
-        description: |-
-          RedisFasterPercent — доля сокращения времени относительно PostgreSQL: (pg-redis)/pg*100 при pg>redis.
-          Это не «во сколько раз быстрее»; множитель см. RedisSpeedupFactor (= pg/redis).
+      redisFasterThanMongoPercent:
+        description: 'RedisFasterPercent — доля сокращения времени относительно MongoDB:
+          (mongo-redis)/mongo*100 при mongo>redis.'
         type: number
       redisMs:
         type: number
@@ -459,7 +458,7 @@ definitions:
       summary:
         type: string
     type: object
-  health.DiagnosisPostgresSection:
+  health.DiagnosisMongoSection:
     properties:
       approxPayloadJsonBytes:
         description: ApproxPayloadBytes — размер JSON тела, как у cache.Service.Set
@@ -472,8 +471,8 @@ definitions:
       listError:
         type: string
       listLatencyMs:
-        description: ListMs — только CategoryRepository.List (Count + Find внутри
-          репозитория).
+        description: ListMs — только CategoryRepository.List (CountDocuments + Find
+          внутри репозитория).
         type: number
       listRepositoryMethod:
         description: Ниже — тот же путь данных, что GET /categories при промахе кеша.
@@ -526,16 +525,16 @@ definitions:
       comparisonSimple:
         allOf:
         - $ref: '#/definitions/health.DiagnosisComparison'
-        description: ComparisonSimple — SELECT 1 vs PING.
+        description: ComparisonSimple — ping MongoDB vs PING Redis.
       comparisonWorkload:
         allOf:
         - $ref: '#/definitions/health.DiagnosisComparison'
         description: ComparisonWorkload — repository.List (как при промахе кеша) vs
           cache.Get (как при попадании).
+      mongodb:
+        $ref: '#/definitions/health.DiagnosisMongoSection'
       notes:
         type: string
-      postgresql:
-        $ref: '#/definitions/health.DiagnosisPostgresSection'
       redis:
         $ref: '#/definitions/health.DiagnosisRedisSection'
     type: object
@@ -558,10 +557,10 @@ host: localhost:4200
 info:
   contact: {}
   description: 'REST API: категории и продукты (CRUD), JWT + OAuth2, Redis (кеш списков
-    и профиля, JTI access в Redis), health-эндпоинты для мониторинга Redis и диагностики
-    латентности БД vs кеша.'
-  title: Lab 2–5 REST API
-  version: "1.1"
+    и профиля, JTI access в Redis), MongoDB вместо PostgreSQL. Health-эндпоинты для
+    мониторинга Redis и диагностики латентности MongoDB vs кеша.'
+  title: Lab 2–6 REST API
+  version: "1.2"
 paths:
   /auth/forgot-password:
     post:

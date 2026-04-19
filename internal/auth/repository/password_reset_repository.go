@@ -2,10 +2,11 @@ package repository
 
 import (
 	"context"
-	"errors"
 	"time"
 
-	"gorm.io/gorm"
+	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/lab2/rest-api/internal/auth/domain"
 )
@@ -18,27 +19,33 @@ type PasswordResetRepository interface {
 	DeleteExpired(ctx context.Context) error
 }
 
-// passwordResetRepositoryImpl реализует интерфейс PasswordResetRepository
 type passwordResetRepositoryImpl struct {
-	db *gorm.DB
+	col *mongo.Collection
 }
 
 // NewPasswordResetRepository создаёт новый экземпляр репозитория
-func NewPasswordResetRepository(db *gorm.DB) PasswordResetRepository {
-	return &passwordResetRepositoryImpl{db: db}
+func NewPasswordResetRepository(col *mongo.Collection) PasswordResetRepository {
+	return &passwordResetRepositoryImpl{col: col}
 }
 
-// Create создаёт новый токен сброса пароля
 func (r *passwordResetRepositoryImpl) Create(ctx context.Context, token *domain.PasswordResetToken) error {
-	return r.db.WithContext(ctx).Create(token).Error
+	if token.ID == uuid.Nil {
+		token.ID = uuid.New()
+	}
+	token.CreatedAt = time.Now()
+	_, err := r.col.InsertOne(ctx, token)
+	return err
 }
 
-// GetByToken находит токен по значению
 func (r *passwordResetRepositoryImpl) GetByToken(ctx context.Context, token string) (*domain.PasswordResetToken, error) {
+	filter := bson.M{
+		"token":      token,
+		"used":       false,
+		"expires_at": bson.M{"$gt": time.Now()},
+	}
 	var resetToken domain.PasswordResetToken
-	err := r.db.WithContext(ctx).Where("token = ? AND used = ? AND expires_at > ?", token, false, time.Now()).First(&resetToken).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+	if err := r.col.FindOne(ctx, filter).Decode(&resetToken); err != nil {
+		if err == mongo.ErrNoDocuments {
 			return nil, nil
 		}
 		return nil, err
@@ -46,17 +53,15 @@ func (r *passwordResetRepositoryImpl) GetByToken(ctx context.Context, token stri
 	return &resetToken, nil
 }
 
-// MarkAsUsed помечает токен как использованный
 func (r *passwordResetRepositoryImpl) MarkAsUsed(ctx context.Context, token string) error {
-	return r.db.WithContext(ctx).
-		Model(&domain.PasswordResetToken{}).
-		Where("token = ?", token).
-		Update("used", true).Error
+	filter := bson.M{"token": token}
+	update := bson.M{"$set": bson.M{"used": true}}
+	_, err := r.col.UpdateOne(ctx, filter, update)
+	return err
 }
 
-// DeleteExpired удаляет истёкшие токены
 func (r *passwordResetRepositoryImpl) DeleteExpired(ctx context.Context) error {
-	return r.db.WithContext(ctx).
-		Where("expires_at < ?", time.Now()).
-		Delete(&domain.PasswordResetToken{}).Error
+	filter := bson.M{"expires_at": bson.M{"$lt": time.Now()}}
+	_, err := r.col.DeleteMany(ctx, filter)
+	return err
 }
