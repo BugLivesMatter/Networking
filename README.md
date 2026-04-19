@@ -1,23 +1,34 @@
-# Лабораторные работы №2–5: REST API с авторизацией, Swagger и Redis
+# Лабораторные работы №2–6: REST API с авторизацией, Swagger, Redis и MongoDB
 
 ## Описание проекта
 
-RESTful API на Go (Gin + PostgreSQL + Redis) с аутентификацией, CRUD-ресурсами, кешированием и автоматической документацией OpenAPI (Swagger).
+RESTful API на Go (Gin + **MongoDB** + Redis) с аутентификацией, CRUD-ресурсами, кешированием и автоматической документацией OpenAPI (Swagger).
+
+> **ЛР6:** PostgreSQL полностью заменён на MongoDB 7. Подробнее об изменениях и отличиях двух СУБД — в [differences.md](differences.md).
 
 ### Что реализовано
+
+**Лабораторная работа №6 — MongoDB:**
+- PostgreSQL заменён на MongoDB 7 (`mongo:7` в Docker)
+- Хранение данных в коллекциях (документоориентированная модель)
+- UUID в поле `_id` вместо SQL-первичного ключа
+- Soft Delete через поле `deleted_at` (фильтр `{"deleted_at": null}`)
+- Индексы создаются программно в `internal/database/mongodb.go` (заменяет SQL-миграции)
+- Подключение через MongoDB URI (`MONGO_URI`)
+- Минимальные изменения бизнес-логики за счёт Repository Pattern
+- Диагностика: `GET /health/diagnosis` сравнивает латентность MongoDB vs Redis
 
 **Лабораторная работа №2 — CRUD REST API:**
 - Ресурсы: категории (`/categories`) и продукты (`/products`)
 - Полный CRUD с поддержкой пагинации (`page`, `limit`)
 - Мягкое удаление (Soft Delete)
-- Миграции базы данных через `golang-migrate`
 
 **Лабораторная работа №3 — Авторизация и аутентификация:**
 - Регистрация, вход, выход, сброс пароля
 - JWT Access + Refresh с подписью HS256
 - Передача токенов через `HttpOnly`, `SameSite` cookies
 - Хеширование паролей: `bcrypt` с уникальной солью
-- Refresh-токены в PostgreSQL (хеши), отзыв сессий (`logout` / `logout-all`)
+- Refresh-токены в MongoDB (хеши), отзыв сессий (`logout` / `logout-all`)
 - OAuth Яндекс (Authorization Code Grant)
 - Защищённые маршруты `/categories` и `/products` через middleware
 
@@ -38,7 +49,7 @@ RESTful API на Go (Gin + PostgreSQL + Redis) с аутентификацией
 
 **Диагностика (лабораторная / мониторинг):**
 - **`GET /health/redis`** — PING, INFO, DBSIZE, метрики обращений приложения к кешу (`RedisStatusResponse`)
-- **`GET /health/diagnosis`** — сравнение латентности PostgreSQL и Redis на том же пути данных, что **`GET /categories`** (параметры `page`, `limit`; перед замером выполняется `Del` ключа страницы — см. поле `notes` в ответе)
+- **`GET /health/diagnosis`** — сравнение латентности MongoDB и Redis на том же пути данных, что **`GET /categories`** (параметры `page`, `limit`; перед замером выполняется `Del` ключа страницы — см. поле `notes` в ответе)
 
 ---
 
@@ -61,12 +72,11 @@ cp .env.example .env
 Минимальный набор (см. также `.env.example`):
 
 ```env
-# === Database ===
-DB_HOST=postgres
-DB_PORT=5432
-DB_USER=student
-DB_PASSWORD=student
-DB_NAME=wp_labs
+# === MongoDB ===
+MONGO_URI=mongodb://admin:secret@mongodb:27017/wp_labs?authSource=admin
+MONGO_DB_NAME=wp_labs
+MONGO_ROOT_USER=admin
+MONGO_ROOT_PASSWORD=secret
 
 # === JWT (секреты не короче 32 символов) ===
 JWT_ACCESS_SECRET=your_access_secret_key_min_32_chars
@@ -104,7 +114,7 @@ API: **`http://localhost:4200`**
 
 ```bash
 docker-compose down
-docker-compose down -v   # удалит тома Postgres и Redis
+docker-compose down -v   # удалит тома MongoDB и Redis
 ```
 
 ---
@@ -171,21 +181,42 @@ go run github.com/swaggo/swag/cmd/swag@latest init -g cmd/server/main.go -o docs
 
 ---
 
-## Миграции
+## MongoDB: проверка данных
 
-Выполняются при старте приложения (`runMigrations` в `cmd/server/main.go`).
+Подключение к MongoDB в контейнере через `mongosh`:
 
-Файлы в `internal/migrations/`:
+```bash
+docker exec -it wp_labs_mongo mongosh -u admin -p secret --authenticationDatabase admin
+```
 
-| Версия | Содержание |
-|--------|------------|
-| `000001` | Категории |
-| `000002` | Продукты |
-| `000003` | Пользователи |
-| `000004` | Refresh-токены |
-| `000005` | Токены сброса пароля |
-| `000006` | `access_token_hash` у refresh-токенов |
-| `000007` | `access_jti` у refresh-токенов (синхронизация с Redis при refresh) |
+Пример команд:
+
+```js
+use wp_labs
+db.categories.find({ deleted_at: null })
+db.products.find({ category_id: <uuid-binary> })
+db.users.getIndexes()
+```
+
+В MongoDB Compass: подключиться по `mongodb://admin:secret@localhost:27017/?authSource=admin`.
+
+---
+
+## Индексы (заменяют SQL-миграции)
+
+Создаются автоматически при старте приложения (`database.EnsureIndexes` в `internal/database/mongodb.go`).
+
+| Коллекция | Поле(я) | Тип |
+|-----------|---------|-----|
+| `categories` | `deleted_at` | sparse |
+| `products` | `category_id`, `deleted_at` | compound |
+| `users` | `email` | unique |
+| `users` | `phone`, `yandex_id`, `vk_id` | unique + sparse |
+| `refresh_tokens` | `token_hash` | unique |
+| `refresh_tokens` | `access_token_hash` | unique + sparse |
+| `refresh_tokens` | `user_id` | index |
+| `password_reset_tokens` | `token` | unique |
+| `password_reset_tokens` | `user_id` | index |
 
 ---
 

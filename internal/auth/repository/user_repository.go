@@ -2,11 +2,11 @@ package repository
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/google/uuid"
-	"gorm.io/gorm"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/lab2/rest-api/internal/auth/domain"
 )
@@ -23,91 +23,76 @@ type UserRepository interface {
 	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash, salt string) error
 }
 
-// userRepositoryImpl реализует интерфейс UserRepository
 type userRepositoryImpl struct {
-	db *gorm.DB
+	col *mongo.Collection
 }
 
 // NewUserRepository создаёт новый экземпляр репозитория
-func NewUserRepository(db *gorm.DB) UserRepository {
-	return &userRepositoryImpl{db: db}
+func NewUserRepository(col *mongo.Collection) UserRepository {
+	return &userRepositoryImpl{col: col}
 }
 
-// Create создаёт нового пользователя в БД
 func (r *userRepositoryImpl) Create(ctx context.Context, user *domain.User) error {
-	return r.db.WithContext(ctx).Create(user).Error
+	if user.ID == uuid.Nil {
+		user.ID = uuid.New()
+	}
+	now := time.Now()
+	user.CreatedAt = now
+	user.UpdatedAt = now
+	_, err := r.col.InsertOne(ctx, user)
+	return err
 }
 
-// GetByID находит пользователя по ID
 func (r *userRepositoryImpl) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
-	var user domain.User
-	err := r.db.WithContext(ctx).First(&user, id).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &user, nil
+	return r.findOne(ctx, bson.M{"_id": id, "deleted_at": nil})
 }
 
-// GetByEmail находит пользователя по email
 func (r *userRepositoryImpl) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
-	var user domain.User
-	err := r.db.WithContext(ctx).Where("email = ?", email).First(&user).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &user, nil
+	return r.findOne(ctx, bson.M{"email": email, "deleted_at": nil})
 }
 
-// GetByYandexID находит пользователя по Yandex ID
 func (r *userRepositoryImpl) GetByYandexID(ctx context.Context, yandexID string) (*domain.User, error) {
-	var user domain.User
-	err := r.db.WithContext(ctx).Where("yandex_id = ?", yandexID).First(&user).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &user, nil
+	return r.findOne(ctx, bson.M{"yandex_id": yandexID, "deleted_at": nil})
 }
 
-// GetByVKID находит пользователя по VK ID
 func (r *userRepositoryImpl) GetByVKID(ctx context.Context, vkID string) (*domain.User, error) {
+	return r.findOne(ctx, bson.M{"vk_id": vkID, "deleted_at": nil})
+}
+
+func (r *userRepositoryImpl) Update(ctx context.Context, user *domain.User) error {
+	user.UpdatedAt = time.Now()
+	filter := bson.M{"_id": user.ID}
+	update := bson.M{"$set": user}
+	_, err := r.col.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *userRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error {
+	now := time.Now()
+	filter := bson.M{"_id": id}
+	update := bson.M{"$set": bson.M{"deleted_at": now}}
+	_, err := r.col.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *userRepositoryImpl) UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash, salt string) error {
+	filter := bson.M{"_id": userID}
+	update := bson.M{"$set": bson.M{
+		"password_hash": passwordHash,
+		"salt":          salt,
+		"updated_at":    time.Now(),
+	}}
+	_, err := r.col.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *userRepositoryImpl) findOne(ctx context.Context, filter bson.M) (*domain.User, error) {
 	var user domain.User
-	err := r.db.WithContext(ctx).Where("vk_id = ?", vkID).First(&user).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+	if err := r.col.FindOne(ctx, filter).Decode(&user); err != nil {
+		if err == mongo.ErrNoDocuments {
 			return nil, nil
 		}
 		return nil, err
 	}
 	return &user, nil
-}
-
-// Update обновляет данные пользователя
-func (r *userRepositoryImpl) Update(ctx context.Context, user *domain.User) error {
-	return r.db.WithContext(ctx).Save(user).Error
-}
-
-// Delete мягко удаляет пользователя (soft delete)
-func (r *userRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Delete(&domain.User{}, id).Error
-}
-
-// UpdatePassword обновляет пароль пользователя
-func (r *userRepositoryImpl) UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash, salt string) error {
-	return r.db.WithContext(ctx).
-		Model(&domain.User{}).
-		Where("id = ?", userID).
-		Updates(map[string]interface{}{
-			"password_hash": passwordHash,
-			"salt":          salt,
-			"updated_at":    time.Now(),
-		}).Error
 }

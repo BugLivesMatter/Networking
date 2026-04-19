@@ -2106,11 +2106,11 @@ const docTemplate = `{
         "health.DiagnosisComparison": {
             "type": "object",
             "properties": {
-                "postgresqlMs": {
+                "mongodbMs": {
                     "type": "number"
                 },
-                "redisFasterThanPostgresPercent": {
-                    "description": "RedisFasterPercent — доля сокращения времени относительно PostgreSQL: (pg-redis)/pg*100 при pg\u003eredis.\nЭто не «во сколько раз быстрее»; множитель см. RedisSpeedupFactor (= pg/redis).",
+                "redisFasterThanMongoPercent": {
+                    "description": "RedisFasterPercent — доля сокращения времени относительно MongoDB: (mongo-redis)/mongo*100 при mongo\u003eredis.",
                     "type": "number"
                 },
                 "redisMs": {
@@ -2124,7 +2124,7 @@ const docTemplate = `{
                 }
             }
         },
-        "health.DiagnosisPostgresSection": {
+        "health.DiagnosisMongoSection": {
             "type": "object",
             "properties": {
                 "approxPayloadJsonBytes": {
@@ -2141,7 +2141,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "listLatencyMs": {
-                    "description": "ListMs — только CategoryRepository.List (Count + Find внутри репозитория).",
+                    "description": "ListMs — только CategoryRepository.List (CountDocuments + Find внутри репозитория).",
                     "type": "number"
                 },
                 "listRepositoryMethod": {
@@ -2217,7 +2217,7 @@ const docTemplate = `{
                     ]
                 },
                 "comparisonSimple": {
-                    "description": "ComparisonSimple — SELECT 1 vs PING.",
+                    "description": "ComparisonSimple — ping MongoDB vs PING Redis.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/health.DiagnosisComparison"
@@ -2232,11 +2232,11 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "mongodb": {
+                    "$ref": "#/definitions/health.DiagnosisMongoSection"
+                },
                 "notes": {
                     "type": "string"
-                },
-                "postgresql": {
-                    "$ref": "#/definitions/health.DiagnosisPostgresSection"
                 },
                 "redis": {
                     "$ref": "#/definitions/health.DiagnosisRedisSection"
@@ -2276,12 +2276,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.1",
+	Version:          "1.2",
 	Host:             "localhost:4200",
 	BasePath:         "/",
 	Schemes:          []string{},
-	Title:            "Lab 2–5 REST API",
-	Description:      "REST API: категории и продукты (CRUD), JWT + OAuth2, Redis (кеш списков и профиля, JTI access в Redis), health-эндпоинты для мониторинга Redis и диагностики латентности БД vs кеша.",
+	Title:            "Lab 2–6 REST API",
+	Description:      "REST API: категории и продукты (CRUD), JWT + OAuth2, Redis (кеш списков и профиля, JTI access в Redis), MongoDB вместо PostgreSQL. Health-эндпоинты для мониторинга Redis и диагностики латентности MongoDB vs кеша.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",
