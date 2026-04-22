@@ -76,6 +76,26 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 				Options: options.Index().SetUnique(true).SetSparse(true),
 			},
 		},
+		{
+			collection: "users",
+			model: mongo.IndexModel{
+				Keys:    bson.D{{Key: "avatar_file_id", Value: 1}},
+				Options: options.Index().SetSparse(true),
+			},
+		},
+		// files
+		{
+			collection: "files",
+			model: mongo.IndexModel{
+				Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "deleted_at", Value: 1}},
+			},
+		},
+		{
+			collection: "files",
+			model: mongo.IndexModel{
+				Keys: bson.D{{Key: "object_key", Value: 1}},
+			},
+		},
 		// refresh_tokens
 		{
 			collection: "refresh_tokens",
