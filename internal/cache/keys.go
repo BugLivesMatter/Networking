@@ -38,3 +38,7 @@ func UserAccessJTIKey(userID uuid.UUID, jti string) string {
 func UserAccessJTIPattern(userID uuid.UUID) string {
 	return fmt.Sprintf("%s:auth:user:%s:access:*", appPrefix, userID.String())
 }
+
+func FileMetaKey(fileID uuid.UUID) string {
+	return fmt.Sprintf("%s:files:%s:meta", appPrefix, fileID.String())
+}

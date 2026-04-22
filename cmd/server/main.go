@@ -23,6 +23,9 @@ import (
 	categorysvc "github.com/lab2/rest-api/internal/category/service"
 	"github.com/lab2/rest-api/internal/config"
 	"github.com/lab2/rest-api/internal/database"
+	filehandler "github.com/lab2/rest-api/internal/file/handler"
+	filerepo "github.com/lab2/rest-api/internal/file/repository"
+	fileservice "github.com/lab2/rest-api/internal/file/service"
 	"github.com/lab2/rest-api/internal/health"
 	"github.com/lab2/rest-api/internal/middleware"
 	producthandler "github.com/lab2/rest-api/internal/product/handler"
@@ -36,6 +39,7 @@ import (
 	authmiddleware "github.com/lab2/rest-api/internal/auth/middleware"
 	authrepo "github.com/lab2/rest-api/internal/auth/repository"
 	authservice "github.com/lab2/rest-api/internal/auth/service"
+	"github.com/lab2/rest-api/internal/storage"
 )
 
 func main() {
@@ -65,6 +69,7 @@ func main() {
 	colPassReset := mongoDB.Collection("password_reset_tokens")
 	colCategories := mongoDB.Collection("categories")
 	colProducts := mongoDB.Collection("products")
+	colFiles := mongoDB.Collection("files")
 
 	// ========== REDIS / CACHE ==========
 	cacheClient, cacheErr := cache.NewRedisClient(ctx, cfg.RedisHost, cfg.RedisPort, cfg.RedisPassword)
@@ -73,9 +78,15 @@ func main() {
 	}
 	cacheService := cache.NewService(cacheClient, cfg.CacheEnabled)
 
+	storageService, err := storage.NewMinIOService(cfg)
+	if err != nil {
+		log.Fatalf("init minio service: %v", err)
+	}
+
 	// ========== AUTH МОДУЛЬ ==========
 	userRepo := authrepo.NewUserRepository(colUsers)
 	tokenRepo := authrepo.NewTokenRepository(colTokens)
+	fileRepo := filerepo.NewFileRepository(colFiles)
 
 	passwordService := authservice.NewPasswordService()
 
@@ -95,6 +106,7 @@ func main() {
 		passwordService,
 		jwtService,
 		passwordResetRepo,
+		fileRepo,
 		cacheService,
 		cfg.CacheTTLDefault,
 	)
@@ -124,10 +136,12 @@ func main() {
 	// ========== КАТЕГОРИИ И ПРОДУКТЫ ==========
 	categoryRepo := categoryrepo.NewCategoryRepository(colCategories)
 	productRepo := productrepo.NewProductRepository(colProducts, colCategories)
+	fileSvc := fileservice.NewService(fileRepo, storageService, cacheService, cfg.CacheTTLDefault, cfg.MinIOBucket, cfg.MaxFileSize)
 	categorySvc := categorysvc.NewCategoryService(categoryRepo, productRepo, cacheService, cfg.CacheTTLDefault)
 	productSvc := productsvc.NewProductService(productRepo, categoryRepo, cacheService, cfg.CacheTTLDefault)
 	categoryHandler := categoryhandler.NewCategoryHandler(categorySvc)
 	productHandler := producthandler.NewProductHandler(productSvc)
+	fileHandler := filehandler.NewHandler(fileSvc, storageService)
 
 	// ========== РОУТЕР ==========
 	r := gin.New()
@@ -211,6 +225,21 @@ func main() {
 		products.PUT("/:id", productHandler.Update)
 		products.PATCH("/:id", productHandler.Patch)
 		products.DELETE("/:id", productHandler.Delete)
+	}
+
+	files := r.Group("/files")
+	files.Use(authMW)
+	{
+		files.POST("", fileHandler.Upload)
+		files.GET("/:fileId", fileHandler.Download)
+		files.DELETE("/:fileId", fileHandler.Delete)
+	}
+
+	profile := r.Group("/profile")
+	profile.Use(authMW)
+	{
+		profile.GET("", authHandler.GetProfile)
+		profile.POST("", authHandler.UpdateProfile)
 	}
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
