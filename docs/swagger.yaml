@@ -96,11 +96,46 @@ definitions:
       totalCacheOperations:
         type: integer
     type: object
-  domain.UserResponse:
+  domain.FileResponse:
     properties:
       createdAt:
         example: "2026-03-19T13:18:48.000Z"
         format: date-time
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      mimetype:
+        example: image/png
+        type: string
+      originalName:
+        example: avatar.png
+        type: string
+      size:
+        example: 20480
+        type: integer
+      updatedAt:
+        example: "2026-03-19T13:18:48.000Z"
+        format: date-time
+        type: string
+      userId:
+        example: 550e8400-e29b-41d4-a716-446655440001
+        type: string
+    type: object
+  domain.UserResponse:
+    properties:
+      avatarFileId:
+        example: 550e8400-e29b-41d4-a716-446655440001
+        type: string
+      bio:
+        example: Backend разработчик
+        type: string
+      createdAt:
+        example: "2026-03-19T13:18:48.000Z"
+        format: date-time
+        type: string
+      displayName:
+        example: Иван Иванов
         type: string
       email:
         example: student@example.com
@@ -436,6 +471,23 @@ definitions:
     - name
     - price
     - status
+    type: object
+  dto.UpdateProfileRequest:
+    properties:
+      avatarFileId:
+        example: 550e8400-e29b-41d4-a716-446655440001
+        type: string
+      bio:
+        example: Backend разработчик
+        type: string
+      displayName:
+        example: Иван Иванов
+        type: string
+    type: object
+  dto.UploadFileResponse:
+    properties:
+      file:
+        $ref: '#/definitions/domain.FileResponse'
     type: object
   handler.AuthErrorResponse:
     properties:
@@ -1202,6 +1254,117 @@ paths:
       summary: Полное обновление категории
       tags:
       - categories
+  /files:
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Файл
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.UploadFileResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Загрузка файла
+      tags:
+      - files
+  /files/{fileId}:
+    delete:
+      parameters:
+      - description: ID файла
+        in: path
+        name: fileId
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Удаление файла
+      tags:
+      - files
+    get:
+      parameters:
+      - description: ID файла
+        in: path
+        name: fileId
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Скачивание файла по ID
+      tags:
+      - files
   /health/diagnosis:
     get:
       description: Использует CategoryRepository.List и cache.Service с тем же ключом
@@ -1509,6 +1672,70 @@ paths:
       summary: Полное обновление продукта
       tags:
       - products
+  /profile:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.UserResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Получение профиля текущего пользователя
+      tags:
+      - profile
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Данные обновления профиля
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handler.AuthErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Обновление профиля текущего пользователя
+      tags:
+      - profile
 securityDefinitions:
   CookieAuth:
     in: cookie
