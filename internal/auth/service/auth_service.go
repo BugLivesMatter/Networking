@@ -13,6 +13,7 @@ import (
 	"github.com/lab2/rest-api/internal/auth/dto"
 	"github.com/lab2/rest-api/internal/auth/repository"
 	"github.com/lab2/rest-api/internal/cache"
+	filerepo "github.com/lab2/rest-api/internal/file/repository"
 )
 
 // AuthService определяет интерфейс для бизнес-логики авторизации
@@ -23,6 +24,7 @@ type AuthService interface {
 	Logout(ctx context.Context, refreshToken, accessToken string) error
 	LogoutAll(ctx context.Context, userID uuid.UUID) error
 	GetUserByID(ctx context.Context, userID uuid.UUID) (*domain.UserResponse, error)
+	UpdateProfile(ctx context.Context, userID uuid.UUID, req *dto.UpdateProfileRequest) (*domain.UserResponse, error)
 	ForgotPassword(ctx context.Context, email string) error
 	ResetPassword(ctx context.Context, token, newPassword string) error
 }
@@ -34,6 +36,7 @@ type authServiceImpl struct {
 	passSvc        PasswordService
 	jwtSvc         JWTService
 	resetTokenRepo repository.PasswordResetRepository
+	fileRepo       filerepo.FileRepository
 	cacheSvc       cache.Service
 	cacheTTL       time.Duration
 }
@@ -45,6 +48,7 @@ func NewAuthService(
 	passSvc PasswordService,
 	jwtSvc JWTService,
 	resetTokenRepo repository.PasswordResetRepository,
+	fileRepo filerepo.FileRepository,
 	cacheSvc cache.Service,
 	cacheTTL time.Duration,
 ) AuthService {
@@ -54,6 +58,7 @@ func NewAuthService(
 		passSvc:        passSvc,
 		jwtSvc:         jwtSvc,
 		resetTokenRepo: resetTokenRepo,
+		fileRepo:       fileRepo,
 		cacheSvc:       cacheSvc,
 		cacheTTL:       cacheTTL,
 	}
@@ -272,6 +277,24 @@ func (s *authServiceImpl) GetUserByID(ctx context.Context, userID uuid.UUID) (*d
 	resp := user.ToResponse()
 	_ = s.cacheSvc.Set(ctx, cacheKey, resp, s.cacheTTL)
 	return resp, nil
+}
+
+func (s *authServiceImpl) UpdateProfile(ctx context.Context, userID uuid.UUID, req *dto.UpdateProfileRequest) (*domain.UserResponse, error) {
+	if req.AvatarFileID != nil {
+		ownedFile, err := s.fileRepo.GetByIDAndUserID(ctx, *req.AvatarFileID, userID)
+		if err != nil {
+			return nil, fmt.Errorf("проверка файла аватара: %w", err)
+		}
+		if ownedFile == nil {
+			return nil, errors.New("указанный файл аватара не принадлежит пользователю")
+		}
+	}
+
+	if err := s.userRepo.UpdateProfile(ctx, userID, req.DisplayName, req.Bio, req.AvatarFileID); err != nil {
+		return nil, fmt.Errorf("обновление профиля: %w", err)
+	}
+	_ = s.cacheSvc.Del(ctx, cache.UserProfileKey(userID))
+	return s.GetUserByID(ctx, userID)
 }
 
 // ForgotPassword генерирует токен сброса пароля и отправляет его на email
