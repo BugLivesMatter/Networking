@@ -31,6 +31,14 @@ type Config struct {
 	RedisPassword   string
 	CacheTTLDefault time.Duration
 	CacheEnabled    bool
+
+	// MinIO / Object Storage
+	MinIOEndpoint  string
+	MinIOAccessKey string
+	MinIOSecretKey string
+	MinIOBucket    string
+	MinIOUseSSL    bool
+	MaxFileSize    int64
 }
 
 func Load() (*Config, error) {
@@ -40,6 +48,8 @@ func Load() (*Config, error) {
 	redisPort, _ := strconv.Atoi(getEnv("REDIS_PORT", "6379"))
 	cacheTTLSeconds, _ := strconv.Atoi(getEnv("CACHE_TTL_DEFAULT", "300"))
 	cacheEnabled, _ := strconv.ParseBool(getEnv("CACHE_ENABLED", "true"))
+	minioUseSSL, _ := strconv.ParseBool(getEnv("MINIO_USE_SSL", "false"))
+	maxFileSize, _ := strconv.ParseInt(getEnv("MAX_FILE_SIZE", "10485760"), 10, 64)
 
 	cfg := &Config{
 		MongoURI:    getEnv("MONGO_URI", "mongodb://localhost:27017"),
@@ -64,6 +74,14 @@ func Load() (*Config, error) {
 		RedisPassword:   getEnv("REDIS_PASSWORD", ""),
 		CacheTTLDefault: time.Duration(cacheTTLSeconds) * time.Second,
 		CacheEnabled:    cacheEnabled,
+
+		// MinIO / Object Storage
+		MinIOEndpoint:  getEnv("MINIO_ENDPOINT", "localhost:9000"),
+		MinIOAccessKey: getEnv("MINIO_ACCESS_KEY", ""),
+		MinIOSecretKey: getEnv("MINIO_SECRET_KEY", ""),
+		MinIOBucket:    getEnv("MINIO_BUCKET", "wp-labs-files"),
+		MinIOUseSSL:    minioUseSSL,
+		MaxFileSize:    maxFileSize,
 	}
 	return cfg, nil
 }
