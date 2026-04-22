@@ -21,6 +21,7 @@ type UserRepository interface {
 	Update(ctx context.Context, user *domain.User) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	UpdatePassword(ctx context.Context, userID uuid.UUID, passwordHash, salt string) error
+	UpdateProfile(ctx context.Context, userID uuid.UUID, displayName, bio *string, avatarFileID *uuid.UUID) error
 }
 
 type userRepositoryImpl struct {
@@ -82,6 +83,26 @@ func (r *userRepositoryImpl) UpdatePassword(ctx context.Context, userID uuid.UUI
 		"salt":          salt,
 		"updated_at":    time.Now(),
 	}}
+	_, err := r.col.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *userRepositoryImpl) UpdateProfile(ctx context.Context, userID uuid.UUID, displayName, bio *string, avatarFileID *uuid.UUID) error {
+	filter := bson.M{"_id": userID, "deleted_at": nil}
+	setFields := bson.M{
+		"updated_at": time.Now(),
+	}
+	if displayName != nil {
+		setFields["display_name"] = *displayName
+	}
+	if bio != nil {
+		setFields["bio"] = *bio
+	}
+	if avatarFileID != nil {
+		setFields["avatar_file_id"] = *avatarFileID
+	}
+
+	update := bson.M{"$set": setFields}
 	_, err := r.col.UpdateOne(ctx, filter, update)
 	return err
 }
