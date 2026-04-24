@@ -52,7 +52,7 @@ func NewMinIOService(cfg *config.Config) (Service, error) {
 }
 
 func (s *minioService) UploadFile(ctx context.Context, reader io.Reader, size int64, filename, mimetype string, userID uuid.UUID) (string, error) {
-	objectKey := buildObjectKey(userID, filename)
+	objectKey := buildObjectKey(userID, mimetype)
 	_, err := s.client.PutObject(ctx, s.bucket, objectKey, reader, size, minio.PutObjectOptions{
 		ContentType: mimetype,
 	})
@@ -110,13 +110,27 @@ func (s *minioService) ensureBucket(ctx context.Context) error {
 	if err := s.client.MakeBucket(ctx, s.bucket, minio.MakeBucketOptions{}); err != nil {
 		return fmt.Errorf("создание bucket в minio: %w", err)
 	}
+	// Explicitly deny public access — default MinIO policy may vary by configuration
+	privatePolicy := `{"Version":"2012-10-17","Statement":[]}`
+	if err := s.client.SetBucketPolicy(ctx, s.bucket, privatePolicy); err != nil {
+		return fmt.Errorf("установка политики bucket в minio: %w", err)
+	}
 	return nil
 }
 
-func buildObjectKey(userID uuid.UUID, filename string) string {
-	ext := ""
-	if dot := strings.LastIndex(filename, "."); dot >= 0 {
-		ext = filename[dot:]
+// buildObjectKey derives extension from MIME type, not from filename, to prevent
+// path traversal and script-execution attacks via crafted filenames.
+func buildObjectKey(userID uuid.UUID, mimetype string) string {
+	return fmt.Sprintf("users/%s/%s%s", userID.String(), uuid.NewString(), mimeToExt(mimetype))
+}
+
+func mimeToExt(mimetype string) string {
+	switch strings.ToLower(mimetype) {
+	case "image/png":
+		return ".png"
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	default:
+		return ""
 	}
-	return fmt.Sprintf("users/%s/%s%s", userID.String(), uuid.NewString(), ext)
 }

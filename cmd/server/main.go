@@ -145,6 +145,7 @@ func main() {
 
 	// ========== РОУТЕР ==========
 	r := gin.New()
+	r.MaxMultipartMemory = cfg.MaxFileSize
 	r.Use(gin.Recovery(), middleware.Recovery())
 	if cfg.AppEnv != "production" {
 		swaggerHandler := ginSwagger.WrapHandler(

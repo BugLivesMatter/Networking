@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"time"
 
@@ -26,7 +27,6 @@ type Service interface {
 	Upload(ctx context.Context, userID uuid.UUID, stream io.Reader, size int64, filename, mimetype string) (*filedomain.File, error)
 	GetByID(ctx context.Context, fileID, userID uuid.UUID) (*filedomain.File, error)
 	Delete(ctx context.Context, fileID, userID uuid.UUID) error
-	GetOwnedFileByID(ctx context.Context, fileID, userID uuid.UUID) (*filedomain.File, error)
 }
 
 type fileService struct {
@@ -81,7 +81,9 @@ func (s *fileService) Upload(ctx context.Context, userID uuid.UUID, stream io.Re
 		Bucket:       s.bucketName,
 	}
 	if err := s.repo.Create(ctx, file); err != nil {
-		_ = s.storage.DeleteFile(ctx, objectKey)
+		if cleanupErr := s.storage.DeleteFile(ctx, objectKey); cleanupErr != nil {
+			log.Printf("WARN: не удалось удалить осиротевший объект MinIO %s: %v", objectKey, cleanupErr)
+		}
 		return nil, fmt.Errorf("сохранение метаданных файла: %w", err)
 	}
 
@@ -127,13 +129,3 @@ func (s *fileService) Delete(ctx context.Context, fileID, userID uuid.UUID) erro
 	return nil
 }
 
-func (s *fileService) GetOwnedFileByID(ctx context.Context, fileID, userID uuid.UUID) (*filedomain.File, error) {
-	file, err := s.repo.GetByIDAndUserID(ctx, fileID, userID)
-	if err != nil {
-		return nil, err
-	}
-	if file == nil {
-		return nil, errors.New("файл не найден")
-	}
-	return file, nil
-}

@@ -16,6 +16,9 @@ import (
 	filerepo "github.com/lab2/rest-api/internal/file/repository"
 )
 
+// ErrAvatarOwnership signals that the requested file is not owned by the user.
+var ErrAvatarOwnership = errors.New("указанный файл аватара не принадлежит пользователю")
+
 // AuthService определяет интерфейс для бизнес-логики авторизации
 type AuthService interface {
 	Register(ctx context.Context, req *dto.RegisterRequest) (*domain.User, error)
@@ -286,7 +289,10 @@ func (s *authServiceImpl) UpdateProfile(ctx context.Context, userID uuid.UUID, r
 			return nil, fmt.Errorf("проверка файла аватара: %w", err)
 		}
 		if ownedFile == nil {
-			return nil, errors.New("указанный файл аватара не принадлежит пользователю")
+			return nil, ErrAvatarOwnership
+		}
+		if !isImageMime(ownedFile.Mimetype) {
+			return nil, errors.New("файл аватара должен быть изображением (PNG или JPEG)")
 		}
 	}
 
@@ -374,4 +380,12 @@ func (s *authServiceImpl) ResetPassword(ctx context.Context, token, newPassword 
 	}
 
 	return nil
+}
+
+func isImageMime(mime string) bool {
+	switch mime {
+	case "image/png", "image/jpeg", "image/jpg":
+		return true
+	}
+	return false
 }

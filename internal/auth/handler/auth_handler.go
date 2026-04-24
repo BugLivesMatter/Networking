@@ -343,7 +343,11 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 
 	profile, err := h.authService.UpdateProfile(c.Request.Context(), userUUID, &req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if errors.Is(err, service.ErrAvatarOwnership) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "внутренняя ошибка сервера"})
+		}
 		return
 	}
 	c.JSON(http.StatusOK, profile)
