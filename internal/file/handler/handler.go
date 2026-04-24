@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -57,13 +58,19 @@ func (h *Handler) Upload(c *gin.Context) {
 	}
 	defer fileStream.Close()
 
+	// Detect MIME from file bytes to prevent Content-Type header spoofing
+	sniff := make([]byte, 512)
+	n, _ := io.ReadFull(fileStream, sniff)
+	detectedMime := http.DetectContentType(sniff[:n])
+	fullStream := io.MultiReader(bytes.NewReader(sniff[:n]), fileStream)
+
 	file, err := h.fileService.Upload(
 		c.Request.Context(),
 		userID,
-		fileStream,
+		fullStream,
 		fileHeader.Size,
 		fileHeader.Filename,
-		fileHeader.Header.Get("Content-Type"),
+		detectedMime,
 	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -115,7 +122,8 @@ func (h *Handler) Download(c *gin.Context) {
 		contentType = file.Mimetype
 	}
 	c.Header("Content-Type", contentType)
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", url.QueryEscape(file.OriginalName)))
+	// RFC 5987 encoding for Unicode filenames
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(file.OriginalName)))
 	c.Header("Content-Length", fmt.Sprintf("%d", streamObj.Size))
 	c.Status(http.StatusOK)
 	_, _ = io.Copy(c.Writer, streamObj.Reader)

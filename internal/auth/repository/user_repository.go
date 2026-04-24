@@ -62,16 +62,26 @@ func (r *userRepositoryImpl) GetByVKID(ctx context.Context, vkID string) (*domai
 
 func (r *userRepositoryImpl) Update(ctx context.Context, user *domain.User) error {
 	user.UpdatedAt = time.Now()
-	filter := bson.M{"_id": user.ID}
-	update := bson.M{"$set": user}
+	filter := bson.M{"_id": user.ID, "deleted_at": nil}
+	// Explicit field map prevents accidental _id update (MongoDB error) and zero-value overwrites
+	update := bson.M{"$set": bson.M{
+		"email":          user.Email,
+		"phone":          user.Phone,
+		"display_name":   user.DisplayName,
+		"bio":            user.Bio,
+		"avatar_file_id": user.AvatarFileID,
+		"yandex_id":      user.YandexID,
+		"vk_id":          user.VKID,
+		"updated_at":     user.UpdatedAt,
+	}}
 	_, err := r.col.UpdateOne(ctx, filter, update)
 	return err
 }
 
 func (r *userRepositoryImpl) Delete(ctx context.Context, id uuid.UUID) error {
 	now := time.Now()
-	filter := bson.M{"_id": id}
-	update := bson.M{"$set": bson.M{"deleted_at": now}}
+	filter := bson.M{"_id": id, "deleted_at": nil}
+	update := bson.M{"$set": bson.M{"deleted_at": now, "updated_at": now}}
 	_, err := r.col.UpdateOne(ctx, filter, update)
 	return err
 }

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -49,8 +50,14 @@ func (r *fileRepository) SoftDelete(ctx context.Context, fileID, userID uuid.UUI
 	now := time.Now()
 	filter := bson.M{"_id": fileID, "user_id": userID, "deleted_at": nil}
 	update := bson.M{"$set": bson.M{"deleted_at": now, "updated_at": now}}
-	_, err := r.col.UpdateOne(ctx, filter, update)
-	return err
+	result, err := r.col.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return errors.New("файл не найден или уже удалён")
+	}
+	return nil
 }
 
 func (r *fileRepository) findOne(ctx context.Context, filter bson.M) (*domain.File, error) {
