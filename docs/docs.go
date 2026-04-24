@@ -1008,6 +1008,181 @@ const docTemplate = `{
                 }
             }
         },
+        "/files": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Загрузка файла",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Файл",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.UploadFileResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/files/{fileId}": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Скачивание файла по ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID файла",
+                        "name": "fileId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Удаление файла",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "ID файла",
+                        "name": "fileId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/health/diagnosis": {
             "get": {
                 "description": "Использует CategoryRepository.List и cache.Service с тем же ключом и JSON, что CategoryService.List. Перед замером удаляет кеш страницы (cache.Del). Параметры page и limit — как у GET /categories.",
@@ -1480,6 +1655,108 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/profile": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Получение профиля текущего пользователя",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.UserResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handler.AuthErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handler.AuthErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.AuthErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Обновление профиля текущего пользователя",
+                "parameters": [
+                    {
+                        "description": "Данные обновления профиля",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateProfileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.UserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handler.AuthErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/handler.AuthErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handler.AuthErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handler.AuthErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1622,13 +1899,60 @@ const docTemplate = `{
                 }
             }
         },
-        "domain.UserResponse": {
+        "domain.FileResponse": {
             "type": "object",
             "properties": {
                 "createdAt": {
                     "type": "string",
                     "format": "date-time",
                     "example": "2026-03-19T13:18:48.000Z"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "mimetype": {
+                    "type": "string",
+                    "example": "image/png"
+                },
+                "originalName": {
+                    "type": "string",
+                    "example": "avatar.png"
+                },
+                "size": {
+                    "type": "integer",
+                    "example": 20480
+                },
+                "updatedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-03-19T13:18:48.000Z"
+                },
+                "userId": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440001"
+                }
+            }
+        },
+        "domain.UserResponse": {
+            "type": "object",
+            "properties": {
+                "avatarFileId": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440001"
+                },
+                "bio": {
+                    "type": "string",
+                    "example": "Backend разработчик"
+                },
+                "createdAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "example": "2026-03-19T13:18:48.000Z"
+                },
+                "displayName": {
+                    "type": "string",
+                    "example": "Иван Иванов"
                 },
                 "email": {
                     "type": "string",
@@ -2094,6 +2418,31 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.UpdateProfileRequest": {
+            "type": "object",
+            "properties": {
+                "avatarFileId": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440001"
+                },
+                "bio": {
+                    "type": "string",
+                    "example": "Backend разработчик"
+                },
+                "displayName": {
+                    "type": "string",
+                    "example": "Иван Иванов"
+                }
+            }
+        },
+        "dto.UploadFileResponse": {
+            "type": "object",
+            "properties": {
+                "file": {
+                    "$ref": "#/definitions/domain.FileResponse"
+                }
+            }
+        },
         "handler.AuthErrorResponse": {
             "type": "object",
             "properties": {
@@ -2106,11 +2455,11 @@ const docTemplate = `{
         "health.DiagnosisComparison": {
             "type": "object",
             "properties": {
-                "postgresqlMs": {
+                "mongodbMs": {
                     "type": "number"
                 },
-                "redisFasterThanPostgresPercent": {
-                    "description": "RedisFasterPercent — доля сокращения времени относительно PostgreSQL: (pg-redis)/pg*100 при pg\u003eredis.\nЭто не «во сколько раз быстрее»; множитель см. RedisSpeedupFactor (= pg/redis).",
+                "redisFasterThanMongoPercent": {
+                    "description": "RedisFasterPercent — доля сокращения времени относительно MongoDB: (mongo-redis)/mongo*100 при mongo\u003eredis.",
                     "type": "number"
                 },
                 "redisMs": {
@@ -2124,7 +2473,7 @@ const docTemplate = `{
                 }
             }
         },
-        "health.DiagnosisPostgresSection": {
+        "health.DiagnosisMongoSection": {
             "type": "object",
             "properties": {
                 "approxPayloadJsonBytes": {
@@ -2141,7 +2490,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "listLatencyMs": {
-                    "description": "ListMs — только CategoryRepository.List (Count + Find внутри репозитория).",
+                    "description": "ListMs — только CategoryRepository.List (CountDocuments + Find внутри репозитория).",
                     "type": "number"
                 },
                 "listRepositoryMethod": {
@@ -2217,7 +2566,7 @@ const docTemplate = `{
                     ]
                 },
                 "comparisonSimple": {
-                    "description": "ComparisonSimple — SELECT 1 vs PING.",
+                    "description": "ComparisonSimple — ping MongoDB vs PING Redis.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/health.DiagnosisComparison"
@@ -2232,11 +2581,11 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "mongodb": {
+                    "$ref": "#/definitions/health.DiagnosisMongoSection"
+                },
                 "notes": {
                     "type": "string"
-                },
-                "postgresql": {
-                    "$ref": "#/definitions/health.DiagnosisPostgresSection"
                 },
                 "redis": {
                     "$ref": "#/definitions/health.DiagnosisRedisSection"
@@ -2276,12 +2625,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.1",
+	Version:          "1.2",
 	Host:             "localhost:4200",
 	BasePath:         "/",
 	Schemes:          []string{},
-	Title:            "Lab 2–5 REST API",
-	Description:      "REST API: категории и продукты (CRUD), JWT + OAuth2, Redis (кеш списков и профиля, JTI access в Redis), health-эндпоинты для мониторинга Redis и диагностики латентности БД vs кеша.",
+	Title:            "Lab 2–6 REST API",
+	Description:      "REST API: категории и продукты (CRUD), JWT + OAuth2, Redis (кеш списков и профиля, JTI access в Redis), MongoDB вместо PostgreSQL. Health-эндпоинты для мониторинга Redis и диагностики латентности MongoDB vs кеша.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

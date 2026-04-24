@@ -280,3 +280,75 @@ func (h *AuthHandler) LogoutAll(c *gin.Context) {
 		Message: "успешный выход из всех сессий",
 	})
 }
+
+// GetProfile обрабатывает GET /profile
+// @Summary Получение профиля текущего пользователя
+// @Tags profile
+// @Produce json
+// @Security CookieAuth
+// @Success 200 {object} domain.UserResponse
+// @Failure 401 {object} AuthErrorResponse
+// @Failure 404 {object} AuthErrorResponse
+// @Failure 500 {object} AuthErrorResponse
+// @Router /profile [get]
+func (h *AuthHandler) GetProfile(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "пользователь не авторизован"})
+		return
+	}
+	userUUID, err := uuid.Parse(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ошибка обработки запроса"})
+		return
+	}
+	profile, err := h.authService.GetUserByID(c.Request.Context(), userUUID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, profile)
+}
+
+// UpdateProfile обрабатывает POST /profile
+// @Summary Обновление профиля текущего пользователя
+// @Tags profile
+// @Accept json
+// @Produce json
+// @Security CookieAuth
+// @Param request body dto.UpdateProfileRequest true "Данные обновления профиля"
+// @Success 200 {object} domain.UserResponse
+// @Failure 400 {object} AuthErrorResponse
+// @Failure 401 {object} AuthErrorResponse
+// @Failure 404 {object} AuthErrorResponse
+// @Failure 500 {object} AuthErrorResponse
+// @Router /profile [post]
+func (h *AuthHandler) UpdateProfile(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "пользователь не авторизован"})
+		return
+	}
+	userUUID, err := uuid.Parse(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ошибка обработки запроса"})
+		return
+	}
+
+	var req dto.UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "некорректные данные запроса"})
+		return
+	}
+
+	profile, err := h.authService.UpdateProfile(c.Request.Context(), userUUID, &req)
+	if err != nil {
+		if errors.Is(err, service.ErrAvatarOwnership) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "внутренняя ошибка сервера"})
+		}
+		return
+	}
+	c.JSON(http.StatusOK, profile)
+}

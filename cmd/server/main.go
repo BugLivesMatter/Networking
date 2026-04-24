@@ -1,6 +1,6 @@
-// @title Lab 2–5 REST API
-// @version 1.1
-// @description REST API: категории и продукты (CRUD), JWT + OAuth2, Redis (кеш списков и профиля, JTI access в Redis), health-эндпоинты для мониторинга Redis и диагностики латентности БД vs кеша.
+// @title Lab 2–6 REST API
+// @version 1.2
+// @description REST API: категории и продукты (CRUD), JWT + OAuth2, Redis (кеш списков и профиля, JTI access в Redis), MongoDB вместо PostgreSQL. Health-эндпоинты для мониторинга Redis и диагностики латентности MongoDB vs кеша.
 // @host localhost:4200
 // @BasePath /
 // @securityDefinitions.apikey CookieAuth
@@ -17,53 +17,30 @@ import (
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lab2/rest-api/docs"
-	"github.com/lab2/rest-api/internal/config"
-	swaggerfiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
-
-	//"github.com/lab2/rest-api/internal/domain"
 	"github.com/lab2/rest-api/internal/cache"
 	categoryhandler "github.com/lab2/rest-api/internal/category/handler"
-	"github.com/lab2/rest-api/internal/health"
 	categoryrepo "github.com/lab2/rest-api/internal/category/repository"
 	categorysvc "github.com/lab2/rest-api/internal/category/service"
+	"github.com/lab2/rest-api/internal/config"
+	"github.com/lab2/rest-api/internal/database"
+	filehandler "github.com/lab2/rest-api/internal/file/handler"
+	filerepo "github.com/lab2/rest-api/internal/file/repository"
+	fileservice "github.com/lab2/rest-api/internal/file/service"
+	"github.com/lab2/rest-api/internal/health"
 	"github.com/lab2/rest-api/internal/middleware"
 	producthandler "github.com/lab2/rest-api/internal/product/handler"
 	productrepo "github.com/lab2/rest-api/internal/product/repository"
 	productsvc "github.com/lab2/rest-api/internal/product/service"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-
-	// Библиотека миграций
-	// Сам пакет migrate
-	"github.com/golang-migrate/migrate/v4"
-	// Драйверы импортируем с подчеркиванием _, чтобы они не конфликтовали с gorm.io/driver/postgres
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 
 	// Auth модуль (с алиасами!)
 	authhandler "github.com/lab2/rest-api/internal/auth/handler"
 	authmiddleware "github.com/lab2/rest-api/internal/auth/middleware"
 	authrepo "github.com/lab2/rest-api/internal/auth/repository"
 	authservice "github.com/lab2/rest-api/internal/auth/service"
+	"github.com/lab2/rest-api/internal/storage"
 )
-
-// runMigrations запускает миграции базы данных
-func runMigrations(dsn string) error {
-	m, err := migrate.New(
-		"file:///app/internal/migrations", // абсолютный путь
-		dsn,
-	)
-	if err != nil {
-		return fmt.Errorf("ошибка инициализации миграций: %w", err)
-	}
-
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		return fmt.Errorf("ошибка применения миграций: %w", err)
-	}
-
-	return nil
-}
 
 func main() {
 	cfg, err := config.Load()
@@ -71,66 +48,78 @@ func main() {
 		log.Fatalf("load config: %v", err)
 	}
 
-	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
+	// ========== MONGODB ==========
+	ctx := context.Background()
+	mongoClient, err := database.Connect(ctx, cfg.MongoURI)
 	if err != nil {
-		log.Fatalf("connect db: %v", err)
+		log.Fatalf("connect mongodb: %v", err)
 	}
+	defer mongoClient.Disconnect(ctx)
 
-	// Запускаем миграции перед стартом приложения
-	if err := runMigrations(cfg.MigrationDSN()); err != nil {
-		log.Fatalf("Ошибка миграций: %v", err)
+	mongoDB := mongoClient.Database(cfg.MongoDBName)
+
+	if err := database.EnsureIndexes(ctx, mongoDB); err != nil {
+		log.Fatalf("ensure indexes: %v", err)
 	}
-	log.Println("Миграции успешно применены")
+	log.Println("MongoDB индексы успешно созданы/проверены")
 
-	// ========== ИНИЦИАЛИЗАЦИЯ AUTH МОДУЛЯ ==========
+	// ========== КОЛЛЕКЦИИ ==========
+	colUsers := mongoDB.Collection("users")
+	colTokens := mongoDB.Collection("refresh_tokens")
+	colPassReset := mongoDB.Collection("password_reset_tokens")
+	colCategories := mongoDB.Collection("categories")
+	colProducts := mongoDB.Collection("products")
+	colFiles := mongoDB.Collection("files")
 
-	// Репозитории
-	userRepo := authrepo.NewUserRepository(db)
-	tokenRepo := authrepo.NewTokenRepository(db)
-	cacheClient, cacheErr := cache.NewRedisClient(context.Background(), cfg.RedisHost, cfg.RedisPort, cfg.RedisPassword)
+	// ========== REDIS / CACHE ==========
+	cacheClient, cacheErr := cache.NewRedisClient(ctx, cfg.RedisHost, cfg.RedisPort, cfg.RedisPassword)
 	if cacheErr != nil {
 		log.Printf("Redis недоступен, продолжаем без кеша: %v", cacheErr)
 	}
 	cacheService := cache.NewService(cacheClient, cfg.CacheEnabled)
 
-	// Сервисы
+	storageService, err := storage.NewMinIOService(cfg)
+	if err != nil {
+		log.Fatalf("init minio service: %v", err)
+	}
+
+	// ========== AUTH МОДУЛЬ ==========
+	userRepo := authrepo.NewUserRepository(colUsers)
+	tokenRepo := authrepo.NewTokenRepository(colTokens)
+	fileRepo := filerepo.NewFileRepository(colFiles)
+
 	passwordService := authservice.NewPasswordService()
 
-	// Парсим время жизни токенов из конфига
 	accessDur, _ := time.ParseDuration(cfg.JWTAccessExpiration)
 	refreshDur, _ := time.ParseDuration(cfg.JWTRefreshExpiration)
-
 	jwtService := authservice.NewJWTService(
 		cfg.JWTAccessSecret,
 		cfg.JWTRefreshSecret,
 		accessDur,
 		refreshDur,
 	)
-	// Репозиторий для токенов сброса пароля
-	passwordResetRepo := authrepo.NewPasswordResetRepository(db)
+
+	passwordResetRepo := authrepo.NewPasswordResetRepository(colPassReset)
 	authService := authservice.NewAuthService(
 		userRepo,
 		tokenRepo,
 		passwordService,
 		jwtService,
 		passwordResetRepo,
+		fileRepo,
 		cacheService,
 		cfg.CacheTTLDefault,
 	)
 
-	// Хендлер
 	authHandler := authhandler.NewAuthHandler(authService)
 	passwordHandler := authhandler.NewPasswordHandler(authService)
 
 	// ========== OAUTH ==========
-
-	// Конфигурация OAuth
 	oauthConfig := &authservice.OAuthConfig{
 		YandexClientID:     cfg.YandexClientID,
 		YandexClientSecret: cfg.YandexClientSecret,
 		YandexRedirectURI:  cfg.YandexCallbackURL,
 	}
-	// Сервис
 	oauthService := authservice.NewOAuthService(
 		userRepo,
 		tokenRepo,
@@ -140,34 +129,29 @@ func main() {
 		cfg.CacheTTLDefault,
 		oauthConfig,
 	)
-
-	// Хендлер
 	oauthHandler := authhandler.NewOAuthHandler(oauthService)
 
-	// Middleware
 	authMW := authmiddleware.AuthMiddleware(jwtService, tokenRepo, cacheService)
-	/*
-		if err := db.AutoMigrate(&domain.Category{}, &domain.Product{}); err != nil {
-			log.Fatalf("migrate: %v", err)
-		}
-	*/
-	categoryRepo := categoryrepo.NewCategoryRepository(db)
-	productRepo := productrepo.NewProductRepository(db)
+
+	// ========== КАТЕГОРИИ И ПРОДУКТЫ ==========
+	categoryRepo := categoryrepo.NewCategoryRepository(colCategories)
+	productRepo := productrepo.NewProductRepository(colProducts, colCategories)
+	fileSvc := fileservice.NewService(fileRepo, storageService, cacheService, cfg.CacheTTLDefault, cfg.MinIOBucket, cfg.MaxFileSize)
 	categorySvc := categorysvc.NewCategoryService(categoryRepo, productRepo, cacheService, cfg.CacheTTLDefault)
 	productSvc := productsvc.NewProductService(productRepo, categoryRepo, cacheService, cfg.CacheTTLDefault)
 	categoryHandler := categoryhandler.NewCategoryHandler(categorySvc)
 	productHandler := producthandler.NewProductHandler(productSvc)
+	fileHandler := filehandler.NewHandler(fileSvc, storageService)
 
+	// ========== РОУТЕР ==========
 	r := gin.New()
+	r.MaxMultipartMemory = cfg.MaxFileSize
 	r.Use(gin.Recovery(), middleware.Recovery())
 	if cfg.AppEnv != "production" {
 		swaggerHandler := ginSwagger.WrapHandler(
 			swaggerfiles.Handler,
 			ginSwagger.PersistAuthorization(true),
 		)
-		// Перехватываем swagger-initializer.js и подменяем его версией с withCredentials: true
-		// и requestInterceptor, чтобы браузер автоматически прикреплял HttpOnly cookies
-		// к запросам Swagger UI (аналог fetch с credentials: 'include').
 		r.GET("/api/docs/*any", func(c *gin.Context) {
 			if c.Param("any") == "/swagger-initializer.js" {
 				c.Header("Content-Type", "application/javascript")
@@ -199,32 +183,29 @@ func main() {
 	}
 
 	r.GET("/health/redis", cache.StatusHandler(cacheService))
-	r.GET("/health/diagnosis", health.DiagnosisHandler(db, cacheClient, categoryRepo, cacheService, cfg.CacheTTLDefault))
+	r.GET("/health/diagnosis", health.DiagnosisHandler(mongoDB, cacheClient, categoryRepo, cacheService, cfg.CacheTTLDefault))
 
-	// ========== PUBLIC ROUTES (без авторизации) ==========
+	// ========== PUBLIC ROUTES ==========
 	publicAuth := r.Group("/auth")
 	{
 		publicAuth.POST("/register", authHandler.Register)
 		publicAuth.POST("/login", authHandler.Login)
 		publicAuth.POST("/refresh", authHandler.Refresh)
-
 		publicAuth.POST("/forgot-password", passwordHandler.ForgotPassword)
 		publicAuth.POST("/reset-password", passwordHandler.ResetPassword)
-		// OAUTH ROUTES
 		publicAuth.GET("/oauth/:provider", oauthHandler.InitOAuth)
 		publicAuth.GET("/oauth/:provider/callback", oauthHandler.OAuthCallback)
 	}
 
-	// ========== PROTECTED ROUTES (с авторизацией) ==========
+	// ========== PROTECTED ROUTES ==========
 	protectedAuth := r.Group("/auth")
-	protectedAuth.Use(authMW) // ← применяем middleware
+	protectedAuth.Use(authMW)
 	{
 		protectedAuth.GET("/whoami", authHandler.WhoAmI)
 		protectedAuth.POST("/logout", authHandler.Logout)
 		protectedAuth.POST("/logout-all", authHandler.LogoutAll)
 	}
 
-	// Categories (с защитой)
 	categories := r.Group("/categories")
 	categories.Use(authMW)
 	{
@@ -236,7 +217,6 @@ func main() {
 		categories.DELETE("/:id", categoryHandler.Delete)
 	}
 
-	// Products (с защитой)
 	products := r.Group("/products")
 	products.Use(authMW)
 	{
@@ -246,6 +226,22 @@ func main() {
 		products.PUT("/:id", productHandler.Update)
 		products.PATCH("/:id", productHandler.Patch)
 		products.DELETE("/:id", productHandler.Delete)
+	}
+
+	files := r.Group("/files")
+	files.Use(authMW)
+	{
+		files.GET("", fileHandler.List)
+		files.POST("", fileHandler.Upload)
+		files.GET("/:fileId", fileHandler.Download)
+		files.DELETE("/:fileId", fileHandler.Delete)
+	}
+
+	profile := r.Group("/profile")
+	profile.Use(authMW)
+	{
+		profile.GET("", authHandler.GetProfile)
+		profile.POST("", authHandler.UpdateProfile)
 	}
 
 	addr := fmt.Sprintf(":%d", cfg.Port)

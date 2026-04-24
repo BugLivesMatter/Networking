@@ -2,11 +2,11 @@ package repository
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/google/uuid"
-	"gorm.io/gorm"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/lab2/rest-api/internal/auth/domain"
 )
@@ -22,78 +22,82 @@ type TokenRepository interface {
 	DeleteExpired(ctx context.Context) error
 }
 
-// tokenRepositoryImpl реализует интерфейс TokenRepository
 type tokenRepositoryImpl struct {
-	db *gorm.DB
+	col *mongo.Collection
 }
 
 // NewTokenRepository создаёт новый экземпляр репозитория
-func NewTokenRepository(db *gorm.DB) TokenRepository {
-	return &tokenRepositoryImpl{db: db}
+func NewTokenRepository(col *mongo.Collection) TokenRepository {
+	return &tokenRepositoryImpl{col: col}
 }
 
-// Create создаёт новый refresh-токен в БД
 func (r *tokenRepositoryImpl) Create(ctx context.Context, token *domain.RefreshToken) error {
-	return r.db.WithContext(ctx).Create(token).Error
+	if token.ID == uuid.Nil {
+		token.ID = uuid.New()
+	}
+	token.CreatedAt = time.Now()
+	_, err := r.col.InsertOne(ctx, token)
+	return err
 }
 
-// GetByHash находит токен по хешу
 func (r *tokenRepositoryImpl) GetByHash(ctx context.Context, tokenHash string) (*domain.RefreshToken, error) {
-	var token domain.RefreshToken
-	err := r.db.WithContext(ctx).Where("token_hash = ?", tokenHash).First(&token).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &token, nil
+	return r.findOne(ctx, bson.M{"token_hash": tokenHash})
 }
 
-// GetByAccessTokenHash ищет активную сессию по хэшу access token.
-// Возвращает nil, если сессия не найдена или уже отозвана.
 func (r *tokenRepositoryImpl) GetByAccessTokenHash(ctx context.Context, accessTokenHash string) (*domain.RefreshToken, error) {
-	var token domain.RefreshToken
-	err := r.db.WithContext(ctx).
-		Where("access_token_hash = ? AND revoked = ? AND expires_at > ?", accessTokenHash, false, time.Now()).
-		First(&token).Error
+	filter := bson.M{
+		"access_token_hash": accessTokenHash,
+		"revoked":           false,
+		"expires_at":        bson.M{"$gt": time.Now()},
+	}
+	return r.findOne(ctx, filter)
+}
+
+func (r *tokenRepositoryImpl) GetActiveByUserID(ctx context.Context, userID uuid.UUID) ([]*domain.RefreshToken, error) {
+	filter := bson.M{
+		"user_id":    userID,
+		"revoked":    false,
+		"expires_at": bson.M{"$gt": time.Now()},
+	}
+	cur, err := r.col.Find(ctx, filter)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var tokens []*domain.RefreshToken
+	if err := cur.All(ctx, &tokens); err != nil {
+		return nil, err
+	}
+	return tokens, nil
+}
+
+func (r *tokenRepositoryImpl) Revoke(ctx context.Context, tokenHash string) error {
+	filter := bson.M{"token_hash": tokenHash}
+	update := bson.M{"$set": bson.M{"revoked": true}}
+	_, err := r.col.UpdateOne(ctx, filter, update)
+	return err
+}
+
+func (r *tokenRepositoryImpl) RevokeAll(ctx context.Context, userID uuid.UUID) error {
+	filter := bson.M{"user_id": userID, "revoked": false}
+	update := bson.M{"$set": bson.M{"revoked": true}}
+	_, err := r.col.UpdateMany(ctx, filter, update)
+	return err
+}
+
+func (r *tokenRepositoryImpl) DeleteExpired(ctx context.Context) error {
+	filter := bson.M{"expires_at": bson.M{"$lt": time.Now()}}
+	_, err := r.col.DeleteMany(ctx, filter)
+	return err
+}
+
+func (r *tokenRepositoryImpl) findOne(ctx context.Context, filter bson.M) (*domain.RefreshToken, error) {
+	var token domain.RefreshToken
+	if err := r.col.FindOne(ctx, filter).Decode(&token); err != nil {
+		if err == mongo.ErrNoDocuments {
 			return nil, nil
 		}
 		return nil, err
 	}
 	return &token, nil
-}
-
-// GetActiveByUserID возвращает все активные токены пользователя
-func (r *tokenRepositoryImpl) GetActiveByUserID(ctx context.Context, userID uuid.UUID) ([]*domain.RefreshToken, error) {
-	var tokens []*domain.RefreshToken
-	err := r.db.WithContext(ctx).
-		Where("user_id = ? AND revoked = ? AND expires_at > ?", userID, false, time.Now()).
-		Find(&tokens).Error
-	return tokens, err
-}
-
-// Revoke помечает токен как отозванный
-func (r *tokenRepositoryImpl) Revoke(ctx context.Context, tokenHash string) error {
-	return r.db.WithContext(ctx).
-		Model(&domain.RefreshToken{}).
-		Where("token_hash = ?", tokenHash).
-		Update("revoked", true).Error
-}
-
-// RevokeAll отзывает все токены пользователя
-func (r *tokenRepositoryImpl) RevokeAll(ctx context.Context, userID uuid.UUID) error {
-	return r.db.WithContext(ctx).
-		Model(&domain.RefreshToken{}).
-		Where("user_id = ? AND revoked = ?", userID, false).
-		Update("revoked", true).Error
-}
-
-// DeleteExpired удаляет истёкшие токены (опционально, для очистки)
-func (r *tokenRepositoryImpl) DeleteExpired(ctx context.Context) error {
-	return r.db.WithContext(ctx).
-		Where("expires_at < ?", time.Now()).
-		Delete(&domain.RefreshToken{}).Error
 }

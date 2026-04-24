@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"gorm.io/gorm"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/lab2/rest-api/internal/cache"
 	"github.com/lab2/rest-api/internal/category/domain"
@@ -22,14 +23,14 @@ type categoriesListCachePayload struct {
 	TotalPages int               `json:"total_pages"`
 }
 
-// DiagnosisResponse — сравнение латентности PostgreSQL и Redis и оценка выгоды от кеша.
+// DiagnosisResponse — сравнение латентности MongoDB и Redis и оценка выгоды от кеша.
 type DiagnosisResponse struct {
 	CheckedAt string `json:"checkedAt"`
 
-	PostgreSQL DiagnosisPostgresSection `json:"postgresql"`
-	Redis      DiagnosisRedisSection    `json:"redis"`
+	MongoDB DiagnosisMongoSection `json:"mongodb"`
+	Redis   DiagnosisRedisSection `json:"redis"`
 
-	// ComparisonSimple — SELECT 1 vs PING.
+	// ComparisonSimple — ping MongoDB vs PING Redis.
 	ComparisonSimple *DiagnosisComparison `json:"comparisonSimple,omitempty"`
 	// ComparisonWorkload — repository.List (как при промахе кеша) vs cache.Get (как при попадании).
 	ComparisonWorkload *DiagnosisComparison `json:"comparisonWorkload,omitempty"`
@@ -39,8 +40,8 @@ type DiagnosisResponse struct {
 	Notes string `json:"notes,omitempty"`
 }
 
-// DiagnosisPostgresSection — замеры обращений к PostgreSQL.
-type DiagnosisPostgresSection struct {
+// DiagnosisMongoSection — замеры обращений к MongoDB.
+type DiagnosisMongoSection struct {
 	OK bool `json:"ok"`
 
 	SimpleQuery string  `json:"simpleQuery,omitempty"`
@@ -53,10 +54,10 @@ type DiagnosisPostgresSection struct {
 	Limit          int    `json:"limit"`
 	CacheKey       string `json:"cacheKey,omitempty"`
 
-	// ListMs — только CategoryRepository.List (Count + Find внутри репозитория).
+	// ListMs — только CategoryRepository.List (CountDocuments + Find внутри репозитория).
 	ListMs float64 `json:"listLatencyMs,omitempty"`
 	// ListRowCount — число записей на странице.
-	ListRowCount int `json:"listRowCount,omitempty"`
+	ListRowCount int   `json:"listRowCount,omitempty"`
 	Total        int64 `json:"total,omitempty"`
 	ListError    string `json:"listError,omitempty"`
 
@@ -82,11 +83,10 @@ type DiagnosisRedisSection struct {
 
 // DiagnosisComparison — сравнение двух латентностей в миллисекундах.
 type DiagnosisComparison struct {
-	PostgresMs float64 `json:"postgresqlMs"`
-	RedisMs    float64 `json:"redisMs"`
-	// RedisFasterPercent — доля сокращения времени относительно PostgreSQL: (pg-redis)/pg*100 при pg>redis.
-	// Это не «во сколько раз быстрее»; множитель см. RedisSpeedupFactor (= pg/redis).
-	RedisFasterPercent *float64 `json:"redisFasterThanPostgresPercent,omitempty"`
+	MongoDBMs float64 `json:"mongodbMs"`
+	RedisMs   float64 `json:"redisMs"`
+	// RedisFasterPercent — доля сокращения времени относительно MongoDB: (mongo-redis)/mongo*100 при mongo>redis.
+	RedisFasterPercent *float64 `json:"redisFasterThanMongoPercent,omitempty"`
 	RedisSpeedupFactor *float64 `json:"redisSpeedupFactor,omitempty"`
 	Summary            string   `json:"summary"`
 }
@@ -95,32 +95,31 @@ func msSince(t time.Time) float64 {
 	return float64(time.Since(t).Microseconds()) / 1000.0
 }
 
-func buildComparison(pgMs, redisMs float64, label string) *DiagnosisComparison {
-	if pgMs < 0 || redisMs < 0 {
+func buildComparison(mongoMs, redisMs float64, label string) *DiagnosisComparison {
+	if mongoMs < 0 || redisMs < 0 {
 		return nil
 	}
 	c := &DiagnosisComparison{
-		PostgresMs: pgMs,
-		RedisMs:    redisMs,
+		MongoDBMs: mongoMs,
+		RedisMs:   redisMs,
 	}
-	if pgMs > 0 && redisMs < pgMs {
-		p := (pgMs - redisMs) / pgMs * 100
+	if mongoMs > 0 && redisMs < mongoMs {
+		p := (mongoMs - redisMs) / mongoMs * 100
 		c.RedisFasterPercent = &p
 	}
 	if redisMs > 0 {
-		f := pgMs / redisMs
+		f := mongoMs / redisMs
 		c.RedisSpeedupFactor = &f
 	}
 	if c.RedisFasterPercent != nil && c.RedisSpeedupFactor != nil {
-		// Процент — сокращение латентности относительно времени БД; «во сколько раз» — по RedisSpeedupFactor.
 		c.Summary = fmt.Sprintf(
-			"%s: %.3f мс (Redis) против %.3f мс (PostgreSQL) — кеш примерно в %.2f раз быстрее по времени; латентность Redis короче на %.1f%% от времени БД",
-			label, redisMs, pgMs, *c.RedisSpeedupFactor, *c.RedisFasterPercent,
+			"%s: %.3f мс (Redis) против %.3f мс (MongoDB) — кеш примерно в %.2f раз быстрее по времени; латентность Redis короче на %.1f%% от времени БД",
+			label, redisMs, mongoMs, *c.RedisSpeedupFactor, *c.RedisFasterPercent,
 		)
 	} else if c.RedisFasterPercent != nil {
-		c.Summary = fmt.Sprintf("%s: %.3f мс (Redis) против %.3f мс (PostgreSQL); латентность Redis короче на %.1f%% от времени БД", label, redisMs, pgMs, *c.RedisFasterPercent)
+		c.Summary = fmt.Sprintf("%s: %.3f мс (Redis) против %.3f мс (MongoDB); латентность Redis короче на %.1f%% от времени БД", label, redisMs, mongoMs, *c.RedisFasterPercent)
 	} else {
-		c.Summary = fmt.Sprintf("%s: при данных замерах кеш не быстрее (pg=%.3f мс, redis=%.3f мс)", label, pgMs, redisMs)
+		c.Summary = fmt.Sprintf("%s: при данных замерах кеш не быстрее (mongo=%.3f мс, redis=%.3f мс)", label, mongoMs, redisMs)
 	}
 	return c
 }
@@ -141,33 +140,32 @@ func normalizePageLimit(page, limit int) (int, int, int) {
 
 // RunDiagnosisParams — параметры прогона (те же page/limit, что у GET /categories).
 type RunDiagnosisParams struct {
-	Page int
+	Page  int
 	Limit int
 }
 
 // RunDiagnosis выполняет замеры. Перед записью в кеш удаляется ключ страницы — как холодный промах для этой пары page/limit.
-func RunDiagnosis(ctx context.Context, db *gorm.DB, rdb *redis.Client, repo categoryrepo.CategoryRepository, cacheSvc cache.Service, cacheTTL time.Duration, p RunDiagnosisParams) DiagnosisResponse {
+func RunDiagnosis(ctx context.Context, mongoDB *mongo.Database, rdb *redis.Client, repo categoryrepo.CategoryRepository, cacheSvc cache.Service, cacheTTL time.Duration, p RunDiagnosisParams) DiagnosisResponse {
 	out := DiagnosisResponse{
 		CheckedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}
 
 	page, limit, offset := normalizePageLimit(p.Page, p.Limit)
-	out.PostgreSQL.Page = page
-	out.PostgreSQL.Limit = limit
+	out.MongoDB.Page = page
+	out.MongoDB.Limit = limit
 	cacheKey := cache.CategoriesListKey(page, limit)
-	out.PostgreSQL.CacheKey = cacheKey
-	out.PostgreSQL.ListRepoMethod = "CategoryRepository.List(ctx, offset, limit) — тот же вызов, что при промахе кеша в CategoryService.List"
+	out.MongoDB.CacheKey = cacheKey
+	out.MongoDB.ListRepoMethod = "CategoryRepository.List(ctx, offset, limit) — тот же вызов, что при промахе кеша в CategoryService.List"
 
-	// --- PostgreSQL: SELECT 1 ---
+	// --- MongoDB: ping через runCommand ---
 	t0 := time.Now()
-	var one int
-	err := db.WithContext(ctx).Raw("SELECT 1").Scan(&one).Error
-	out.PostgreSQL.SimpleMs = msSince(t0)
-	out.PostgreSQL.SimpleQuery = "SELECT 1"
-	if err != nil {
-		out.PostgreSQL.SimpleError = err.Error()
+	pingResult := mongoDB.RunCommand(ctx, bson.D{{Key: "ping", Value: 1}})
+	out.MongoDB.SimpleMs = msSince(t0)
+	out.MongoDB.SimpleQuery = `db.runCommand({ping: 1})`
+	if pingResult.Err() != nil {
+		out.MongoDB.SimpleError = pingResult.Err().Error()
 	} else {
-		out.PostgreSQL.OK = true
+		out.MongoDB.OK = true
 	}
 
 	// --- Redis PING (сырой клиент, как в cache.NewRedisClient) ---
@@ -191,14 +189,14 @@ func RunDiagnosis(ctx context.Context, db *gorm.DB, rdb *redis.Client, repo cate
 	// --- Тот же путь, что CategoryService.List при промахе ---
 	tList := time.Now()
 	categories, total, listErr := repo.List(ctx, offset, limit)
-	out.PostgreSQL.ListMs = msSince(tList)
+	out.MongoDB.ListMs = msSince(tList)
 	if listErr != nil {
-		out.PostgreSQL.ListError = listErr.Error()
+		out.MongoDB.ListError = listErr.Error()
 		out.Redis.CacheError = "пропущено: ошибка List"
 		return out
 	}
-	out.PostgreSQL.ListRowCount = len(categories)
-	out.PostgreSQL.Total = total
+	out.MongoDB.ListRowCount = len(categories)
+	out.MongoDB.Total = total
 
 	totalPages := int(total) / limit
 	if int(total)%limit > 0 {
@@ -210,7 +208,7 @@ func RunDiagnosis(ctx context.Context, db *gorm.DB, rdb *redis.Client, repo cate
 		TotalPages: totalPages,
 	}
 	if b, jErr := json.Marshal(payload); jErr == nil {
-		out.PostgreSQL.ApproxPayloadBytes = len(b)
+		out.MongoDB.ApproxPayloadBytes = len(b)
 	}
 
 	tSet := time.Now()
@@ -230,14 +228,14 @@ func RunDiagnosis(ctx context.Context, db *gorm.DB, rdb *redis.Client, repo cate
 	}
 	out.Redis.CacheHit = hit
 
-	if out.PostgreSQL.SimpleError == "" && out.Redis.PingError == "" && rdb != nil {
-		out.ComparisonSimple = buildComparison(out.PostgreSQL.SimpleMs, out.Redis.PingMs, "Минимальный round-trip (SELECT 1 vs PING)")
+	if out.MongoDB.SimpleError == "" && out.Redis.PingError == "" && rdb != nil {
+		out.ComparisonSimple = buildComparison(out.MongoDB.SimpleMs, out.Redis.PingMs, "Минимальный round-trip (MongoDB ping vs PING)")
 	}
 
 	// Ядро: стоимость чтения из БД vs чтения из кеша тем же cache.Service.Get.
-	out.ComparisonWorkload = buildComparison(out.PostgreSQL.ListMs, out.Redis.CacheGetMs, "Список категорий: repository.List vs cache hit (cache.Service.Get)")
+	out.ComparisonWorkload = buildComparison(out.MongoDB.ListMs, out.Redis.CacheGetMs, "Список категорий: repository.List vs cache hit (cache.Service.Get)")
 
-	missTotal := out.PostgreSQL.ListMs + out.Redis.CacheSetMs
+	missTotal := out.MongoDB.ListMs + out.Redis.CacheSetMs
 	out.ComparisonMissVsHit = buildComparison(missTotal, out.Redis.CacheGetMs, "Полный промах кеша (List+Set) vs cache hit (Get), как два запроса GET /categories")
 
 	return out
