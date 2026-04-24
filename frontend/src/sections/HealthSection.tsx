@@ -66,28 +66,35 @@ export default function HealthSection({ showToast }: { showToast: (t: string, ty
                 )}
               </div>
 
-              {redis.server && typeof redis.server === 'object' && (() => {
+              {typeof redis.server === 'object' && redis.server !== null ? (() => {
                 const s = redis.server as Record<string, unknown>
+                const rows: [string, string][] = [
+                  ['Версия', String(s.redisVersion ?? '—')],
+                  ['Память', String(s.usedMemoryHuman ?? '—')],
+                  ['Клиенты', String(s.connectedClients ?? '—')],
+                  ['Uptime', `${Math.floor(((s.uptime_seconds as number) ?? 0) / 60)} мин`],
+                ]
                 return (
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                    {[
-                      ['Версия', s.redisVersion],
-                      ['Память', s.usedMemoryHuman],
-                      ['Клиенты', s.connectedClients],
-                      ['Uptime', `${Math.floor((s.uptime_seconds as number ?? 0) / 60)} мин`],
-                    ].map(([k, v]) => (
-                      <div key={String(k)} className="flex justify-between">
-                        <span className="text-slate-500">{String(k)}</span>
-                        <span className="text-slate-300 font-mono">{String(v ?? '—')}</span>
+                    {rows.map(([k, v]) => (
+                      <div key={k} className="flex justify-between">
+                        <span className="text-slate-500">{k}</span>
+                        <span className="text-slate-300 font-mono">{v}</span>
                       </div>
                     ))}
                   </div>
                 )
-              })()}
+              })() : null}
 
-              {redis.usage && typeof redis.usage === 'object' && (() => {
+              {typeof redis.usage === 'object' && redis.usage !== null ? (() => {
                 const u = redis.usage as Record<string, unknown>
-                const hit = u.hitRatioEstimate as number
+                const hit = (u.hitRatioEstimate as number) ?? 0
+                const ops: [string, string][] = [
+                  ['GET', String(u.getRequests ?? 0)],
+                  ['SET', String(u.setWrites ?? 0)],
+                  ['DEL', String(u.delSingle ?? 0)],
+                  ['Всего', String(u.totalCacheOperations ?? 0)],
+                ]
                 return (
                   <div className="space-y-1.5">
                     <div className="flex justify-between text-xs">
@@ -101,16 +108,16 @@ export default function HealthSection({ showToast }: { showToast: (t: string, ty
                         style={{ width: `${Math.min(hit * 100, 100)}%` }} />
                     </div>
                     <div className="grid grid-cols-2 gap-x-4 text-xs">
-                      {[['GET', u.getRequests], ['SET', u.setWrites], ['DEL', u.delSingle], ['Всего', u.totalCacheOperations]].map(([k, v]) => (
-                        <div key={String(k)} className="flex justify-between">
-                          <span className="text-slate-500">{String(k)}</span>
-                          <span className="text-slate-300 font-mono">{String(v ?? 0)}</span>
+                      {ops.map(([k, v]) => (
+                        <div key={k} className="flex justify-between">
+                          <span className="text-slate-500">{k}</span>
+                          <span className="text-slate-300 font-mono">{v}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )
-              })()}
+              })() : null}
             </div>
           )}
           <JsonView data={redisData} />
