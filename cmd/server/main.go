@@ -231,6 +231,7 @@ func main() {
 	files := r.Group("/files")
 	files.Use(authMW)
 	{
+		files.GET("", fileHandler.List)
 		files.POST("", fileHandler.Upload)
 		files.GET("/:fileId", fileHandler.Download)
 		files.DELETE("/:fileId", fileHandler.Delete)

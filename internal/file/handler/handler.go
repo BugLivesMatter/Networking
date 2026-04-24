@@ -27,6 +27,33 @@ func NewHandler(fileService service.Service, storageService storage.Service) *Ha
 	}
 }
 
+// List godoc
+// @Summary Список файлов текущего пользователя
+// @Tags files
+// @Produce json
+// @Security CookieAuth
+// @Success 200 {array} domain.FileResponse
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /files [get]
+func (h *Handler) List(c *gin.Context) {
+	userID, err := userIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	files, err := h.fileService.List(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "ошибка получения списка файлов"})
+		return
+	}
+	resp := make([]interface{}, len(files))
+	for i, f := range files {
+		resp[i] = f.ToResponse()
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
 // Upload godoc
 // @Summary Загрузка файла
 // @Tags files

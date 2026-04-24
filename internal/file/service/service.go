@@ -26,6 +26,7 @@ var allowedAvatarMimeTypes = map[string]struct{}{
 type Service interface {
 	Upload(ctx context.Context, userID uuid.UUID, stream io.Reader, size int64, filename, mimetype string) (*filedomain.File, error)
 	GetByID(ctx context.Context, fileID, userID uuid.UUID) (*filedomain.File, error)
+	List(ctx context.Context, userID uuid.UUID) ([]*filedomain.File, error)
 	Delete(ctx context.Context, fileID, userID uuid.UUID) error
 }
 
@@ -110,6 +111,10 @@ func (s *fileService) GetByID(ctx context.Context, fileID, userID uuid.UUID) (*f
 	}
 	_ = s.cacheSvc.Set(ctx, cacheKey, file, s.cacheTTL)
 	return file, nil
+}
+
+func (s *fileService) List(ctx context.Context, userID uuid.UUID) ([]*filedomain.File, error) {
+	return s.repo.ListByUserID(ctx, userID)
 }
 
 func (s *fileService) Delete(ctx context.Context, fileID, userID uuid.UUID) error {

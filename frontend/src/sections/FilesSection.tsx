@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { api } from '../api'
 import type { FileResponse } from '../types'
 import { Card, Btn, JsonView, SectionHeader } from './shared'
@@ -11,7 +11,15 @@ function formatBytes(n: number) {
 
 export default function FilesSection({ showToast }: { showToast: (t: string, type?: 'success' | 'error') => void }) {
   const [files, setFiles] = useState<FileResponse[]>([])
+  const [loadingList, setLoadingList] = useState(true)
   const [dragOver, setDragOver] = useState(false)
+
+  useEffect(() => {
+    api.files.list()
+      .then(data => setFiles(data ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingList(false))
+  }, [])
   const [deleteId, setDeleteId] = useState('')
   const [res, setRes] = useState<Record<string, unknown>>({})
   const [loading, setLoading] = useState('')
@@ -113,8 +121,18 @@ export default function FilesSection({ showToast }: { showToast: (t: string, typ
       </div>
 
       {/* Uploaded files grid */}
-      {files.length > 0 && (
-        <Card title={`Загруженные файлы (${files.length})`}>
+      {loadingList && (
+        <div className="flex items-center gap-2 text-slate-500 text-sm px-1">
+          <span className="w-4 h-4 border-2 border-slate-600 border-t-violet-500 rounded-full animate-spin" />
+          Загрузка файлов...
+        </div>
+      )}
+
+      {!loadingList && (
+        <Card title={`Файлы пользователя (${files.length})`} badge="GET /files">
+          {files.length === 0 && (
+            <p className="text-sm text-slate-600 py-4 text-center">Нет загруженных файлов</p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {files.map(f => (
               <div key={f.id} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3 space-y-2">
