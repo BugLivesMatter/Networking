@@ -98,6 +98,17 @@ services:
     networks:
       - wp_labs_network
 
+  frontend:
+    build: ./frontend
+    container_name: wp_labs_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - app
+    networks:
+      - wp_labs_network
+
 volumes:
   wp_labs_mongo:
   wp_labs_redis:
