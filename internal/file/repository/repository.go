@@ -16,6 +16,7 @@ type FileRepository interface {
 	Create(ctx context.Context, file *domain.File) error
 	GetByIDAndUserID(ctx context.Context, fileID, userID uuid.UUID) (*domain.File, error)
 	GetByID(ctx context.Context, fileID uuid.UUID) (*domain.File, error)
+	ListByUserID(ctx context.Context, userID uuid.UUID) ([]*domain.File, error)
 	SoftDelete(ctx context.Context, fileID, userID uuid.UUID) error
 }
 
@@ -44,6 +45,19 @@ func (r *fileRepository) GetByIDAndUserID(ctx context.Context, fileID, userID uu
 
 func (r *fileRepository) GetByID(ctx context.Context, fileID uuid.UUID) (*domain.File, error) {
 	return r.findOne(ctx, bson.M{"_id": fileID, "deleted_at": nil})
+}
+
+func (r *fileRepository) ListByUserID(ctx context.Context, userID uuid.UUID) ([]*domain.File, error) {
+	cursor, err := r.col.Find(ctx, bson.M{"user_id": userID, "deleted_at": nil})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var files []*domain.File
+	if err := cursor.All(ctx, &files); err != nil {
+		return nil, err
+	}
+	return files, nil
 }
 
 func (r *fileRepository) SoftDelete(ctx context.Context, fileID, userID uuid.UUID) error {

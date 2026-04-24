@@ -49,6 +49,7 @@ export const api = {
     delete: (id: string) => req<null>(`/products/${id}`, { method: 'DELETE' }),
   },
   files: {
+    list: () => req<FileResponse[]>('/files'),
     upload: (file: File) => {
       const fd = new FormData()
       fd.append('file', file)
