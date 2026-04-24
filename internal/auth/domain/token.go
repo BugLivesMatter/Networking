@@ -9,19 +9,14 @@ import (
 // RefreshToken хранит информацию о сессиях пользователя.
 // Оба токена хранятся в виде SHA-256 хэшей для безопасности.
 type RefreshToken struct {
-	ID              uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
-	UserID          uuid.UUID `gorm:"type:uuid;not null" json:"userId"`
-	TokenHash       string    `gorm:"type:text;not null;uniqueIndex" json:"-"`
-	AccessTokenHash string    `gorm:"type:text;uniqueIndex" json:"-"`
-	AccessJTI       string    `gorm:"type:text" json:"-"` // jti access для Del в Redis при refresh
-	ExpiresAt       time.Time `gorm:"type:timestamptz;not null" json:"expiresAt"`
-	Revoked         bool      `gorm:"default:false" json:"revoked"`
-	CreatedAt       time.Time `gorm:"type:timestamptz;default:now()" json:"createdAt"`
-}
-
-// TableName указывает имя таблицы в БД
-func (RefreshToken) TableName() string {
-	return "refresh_tokens"
+	ID              uuid.UUID `bson:"_id"                json:"id"`
+	UserID          uuid.UUID `bson:"user_id"            json:"userId"`
+	TokenHash       string    `bson:"token_hash"         json:"-"`
+	AccessTokenHash string    `bson:"access_token_hash"  json:"-"`
+	AccessJTI       string    `bson:"access_jti"         json:"-"`
+	ExpiresAt       time.Time `bson:"expires_at"         json:"expiresAt"`
+	Revoked         bool      `bson:"revoked"            json:"revoked"`
+	CreatedAt       time.Time `bson:"created_at"         json:"createdAt"`
 }
 
 // IsExpired проверяет, истёк ли токен

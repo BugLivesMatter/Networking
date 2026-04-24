@@ -13,7 +13,11 @@ import (
 	"github.com/lab2/rest-api/internal/auth/dto"
 	"github.com/lab2/rest-api/internal/auth/repository"
 	"github.com/lab2/rest-api/internal/cache"
+	filerepo "github.com/lab2/rest-api/internal/file/repository"
 )
+
+// ErrAvatarOwnership signals that the requested file is not owned by the user.
+var ErrAvatarOwnership = errors.New("указанный файл аватара не принадлежит пользователю")
 
 // AuthService определяет интерфейс для бизнес-логики авторизации
 type AuthService interface {
@@ -23,6 +27,7 @@ type AuthService interface {
 	Logout(ctx context.Context, refreshToken, accessToken string) error
 	LogoutAll(ctx context.Context, userID uuid.UUID) error
 	GetUserByID(ctx context.Context, userID uuid.UUID) (*domain.UserResponse, error)
+	UpdateProfile(ctx context.Context, userID uuid.UUID, req *dto.UpdateProfileRequest) (*domain.UserResponse, error)
 	ForgotPassword(ctx context.Context, email string) error
 	ResetPassword(ctx context.Context, token, newPassword string) error
 }
@@ -34,6 +39,7 @@ type authServiceImpl struct {
 	passSvc        PasswordService
 	jwtSvc         JWTService
 	resetTokenRepo repository.PasswordResetRepository
+	fileRepo       filerepo.FileRepository
 	cacheSvc       cache.Service
 	cacheTTL       time.Duration
 }
@@ -45,6 +51,7 @@ func NewAuthService(
 	passSvc PasswordService,
 	jwtSvc JWTService,
 	resetTokenRepo repository.PasswordResetRepository,
+	fileRepo filerepo.FileRepository,
 	cacheSvc cache.Service,
 	cacheTTL time.Duration,
 ) AuthService {
@@ -54,6 +61,7 @@ func NewAuthService(
 		passSvc:        passSvc,
 		jwtSvc:         jwtSvc,
 		resetTokenRepo: resetTokenRepo,
+		fileRepo:       fileRepo,
 		cacheSvc:       cacheSvc,
 		cacheTTL:       cacheTTL,
 	}
@@ -274,6 +282,27 @@ func (s *authServiceImpl) GetUserByID(ctx context.Context, userID uuid.UUID) (*d
 	return resp, nil
 }
 
+func (s *authServiceImpl) UpdateProfile(ctx context.Context, userID uuid.UUID, req *dto.UpdateProfileRequest) (*domain.UserResponse, error) {
+	if req.AvatarFileID != nil {
+		ownedFile, err := s.fileRepo.GetByIDAndUserID(ctx, *req.AvatarFileID, userID)
+		if err != nil {
+			return nil, fmt.Errorf("проверка файла аватара: %w", err)
+		}
+		if ownedFile == nil {
+			return nil, ErrAvatarOwnership
+		}
+		if !isImageMime(ownedFile.Mimetype) {
+			return nil, errors.New("файл аватара должен быть изображением (PNG или JPEG)")
+		}
+	}
+
+	if err := s.userRepo.UpdateProfile(ctx, userID, req.DisplayName, req.Bio, req.AvatarFileID); err != nil {
+		return nil, fmt.Errorf("обновление профиля: %w", err)
+	}
+	_ = s.cacheSvc.Del(ctx, cache.UserProfileKey(userID))
+	return s.GetUserByID(ctx, userID)
+}
+
 // ForgotPassword генерирует токен сброса пароля и отправляет его на email
 func (s *authServiceImpl) ForgotPassword(ctx context.Context, email string) error {
 	user, err := s.userRepo.GetByEmail(ctx, email)
@@ -351,4 +380,12 @@ func (s *authServiceImpl) ResetPassword(ctx context.Context, token, newPassword 
 	}
 
 	return nil
+}
+
+func isImageMime(mime string) bool {
+	switch mime {
+	case "image/png", "image/jpeg", "image/jpg":
+		return true
+	}
+	return false
 }

@@ -2,10 +2,15 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	categorydomain "github.com/lab2/rest-api/internal/category/domain"
 	"github.com/lab2/rest-api/internal/product/domain"
-	"gorm.io/gorm"
 )
 
 type ProductRepository interface {
@@ -18,68 +23,91 @@ type ProductRepository interface {
 }
 
 type productRepository struct {
-	db *gorm.DB
+	col     *mongo.Collection
+	catCol  *mongo.Collection
 }
 
-func NewProductRepository(db *gorm.DB) ProductRepository {
-	return &productRepository{db: db}
+func NewProductRepository(col, catCol *mongo.Collection) ProductRepository {
+	return &productRepository{col: col, catCol: catCol}
 }
 
 func (r *productRepository) Create(ctx context.Context, product *domain.Product) error {
-	return r.db.WithContext(ctx).Create(product).Error
+	if product.ID == uuid.Nil {
+		product.ID = uuid.New()
+	}
+	now := time.Now()
+	product.CreatedAt = now
+	product.UpdatedAt = now
+	if product.Status == "" {
+		product.Status = "available"
+	}
+	_, err := r.col.InsertOne(ctx, product)
+	return err
 }
 
 func (r *productRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Product, error) {
+	filter := bson.M{"_id": id, "deleted_at": nil}
 	var product domain.Product
-	err := r.db.WithContext(ctx).
-		Preload("Category").
-		Where("id = ? AND deleted_at IS NULL", id).
-		First(&product).Error
-	if err != nil {
+	if err := r.col.FindOne(ctx, filter).Decode(&product); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
 		return nil, err
 	}
+	r.fillCategory(ctx, &product)
 	return &product, nil
 }
 
 func (r *productRepository) List(ctx context.Context, offset, limit int, categoryID *uuid.UUID) ([]domain.Product, int64, error) {
+	filter := bson.M{"deleted_at": nil}
+	if categoryID != nil {
+		filter["category_id"] = *categoryID
+	}
+	total, err := r.col.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	opts := options.Find().SetSkip(int64(offset)).SetLimit(int64(limit))
+	cur, err := r.col.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cur.Close(ctx)
 	var products []domain.Product
-	var total int64
-
-	query := r.db.WithContext(ctx).Model(&domain.Product{}).Where("deleted_at IS NULL")
-	if categoryID != nil {
-		query = query.Where("category_id = ?", *categoryID)
-	}
-	if err := query.Count(&total).Error; err != nil {
+	if err := cur.All(ctx, &products); err != nil {
 		return nil, 0, err
 	}
-
-	findQuery := r.db.WithContext(ctx).
-		Preload("Category").
-		Where("deleted_at IS NULL").
-		Offset(offset).
-		Limit(limit)
-	if categoryID != nil {
-		findQuery = findQuery.Where("category_id = ?", *categoryID)
-	}
-	if err := findQuery.Find(&products).Error; err != nil {
-		return nil, 0, err
+	for i := range products {
+		r.fillCategory(ctx, &products[i])
 	}
 	return products, total, nil
 }
 
 func (r *productRepository) Update(ctx context.Context, product *domain.Product) error {
-	return r.db.WithContext(ctx).Save(product).Error
+	product.UpdatedAt = time.Now()
+	filter := bson.M{"_id": product.ID}
+	update := bson.M{"$set": product}
+	_, err := r.col.UpdateOne(ctx, filter, update)
+	return err
 }
 
 func (r *productRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Delete(&domain.Product{}, "id = ?", id).Error
+	now := time.Now()
+	filter := bson.M{"_id": id}
+	update := bson.M{"$set": bson.M{"deleted_at": now}}
+	_, err := r.col.UpdateOne(ctx, filter, update)
+	return err
 }
 
 func (r *productRepository) CountByCategoryID(ctx context.Context, categoryID uuid.UUID) (int64, error) {
-	var count int64
-	err := r.db.WithContext(ctx).
-		Model(&domain.Product{}).
-		Where("category_id = ? AND deleted_at IS NULL", categoryID).
-		Count(&count).Error
-	return count, err
+	filter := bson.M{"category_id": categoryID, "deleted_at": nil}
+	return r.col.CountDocuments(ctx, filter)
+}
+
+// fillCategory заполняет поле Category из коллекции categories (замена GORM Preload).
+func (r *productRepository) fillCategory(ctx context.Context, product *domain.Product) {
+	var cat categorydomain.Category
+	if err := r.catCol.FindOne(ctx, bson.M{"_id": product.CategoryID}).Decode(&cat); err == nil {
+		product.Category = &cat
+	}
 }

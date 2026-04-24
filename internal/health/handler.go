@@ -8,14 +8,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
-	"gorm.io/gorm"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/lab2/rest-api/internal/cache"
 	categoryrepo "github.com/lab2/rest-api/internal/category/repository"
 	"github.com/lab2/rest-api/pkg/pagination"
 )
 
-// DiagnosisHandler возвращает сравнение PostgreSQL и Redis на том же пути, что GET /categories.
+// DiagnosisHandler возвращает сравнение MongoDB и Redis на том же пути, что GET /categories.
 //
 // @Summary Диагностика БД и Redis (как GET /categories)
 // @Description Использует CategoryRepository.List и cache.Service с тем же ключом и JSON, что CategoryService.List. Перед замером удаляет кеш страницы (cache.Del). Параметры page и limit — как у GET /categories.
@@ -25,7 +25,7 @@ import (
 // @Produce json
 // @Success 200 {object} DiagnosisResponse
 // @Router /health/diagnosis [get]
-func DiagnosisHandler(db *gorm.DB, rdb *redis.Client, repo categoryrepo.CategoryRepository, cacheSvc cache.Service, cacheTTL time.Duration) gin.HandlerFunc {
+func DiagnosisHandler(mongoDB *mongo.Database, rdb *redis.Client, repo categoryrepo.CategoryRepository, cacheSvc cache.Service, cacheTTL time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
 		defer cancel()
@@ -43,7 +43,7 @@ func DiagnosisHandler(db *gorm.DB, rdb *redis.Client, repo categoryrepo.Category
 			}
 		}
 
-		resp := RunDiagnosis(ctx, db, rdb, repo, cacheSvc, cacheTTL, RunDiagnosisParams{Page: page, Limit: limit})
+		resp := RunDiagnosis(ctx, mongoDB, rdb, repo, cacheSvc, cacheTTL, RunDiagnosisParams{Page: page, Limit: limit})
 		c.JSON(http.StatusOK, resp)
 	}
 }
