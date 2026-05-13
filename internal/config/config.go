@@ -151,6 +151,39 @@ func (c *Config) validateMessaging() error {
 	if c.SMTPPort <= 0 || c.SMTPPort > 65535 {
 		return fmt.Errorf("конфигурация: некорректный SMTP_PORT")
 	}
+	if err := c.validateYandexSMTPFrom(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// smtpMailboxFromField извлекает адрес из поля From (поддержка вида "Имя <user@host>").
+func smtpMailboxFromField(from string) string {
+	from = strings.TrimSpace(from)
+	if i := strings.LastIndex(from, "<"); i >= 0 {
+		if j := strings.LastIndex(from, ">"); j > i {
+			return strings.TrimSpace(from[i+1 : j])
+		}
+	}
+	return from
+}
+
+// validateYandexSMTPFrom: у Яндекс.Pочты отправитель MAIL FROM должен совпадать с учётной записью SMTP,
+// иначе типичная ошибка 535 5.7.8 "This user does not have access rights to this service".
+func (c *Config) validateYandexSMTPFrom() error {
+	host := strings.ToLower(strings.TrimSpace(c.SMTPHost))
+	if !strings.Contains(host, "yandex") {
+		return nil
+	}
+	fromBox := strings.ToLower(smtpMailboxFromField(c.SMTPFrom))
+	userBox := strings.ToLower(strings.TrimSpace(c.SMTPUser))
+	if fromBox != userBox {
+		return fmt.Errorf(
+			"конфигурация SMTP (Яндекс): адрес в SMTP_FROM (%q → %s) должен совпадать с SMTP_USER (%q); "+
+				"иначе сервер отвечает 535 «нет прав на сервис». Укажите один и тот же ящик или добавьте алиас в настройках Почты",
+			c.SMTPFrom, fromBox, c.SMTPUser,
+		)
+	}
 	return nil
 }
 
