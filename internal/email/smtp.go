@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/smtp"
@@ -53,7 +54,12 @@ func (s *Sender) SendWelcome(ctx context.Context, toEmail, displayName string, u
 	}
 	host := s.cfg.SMTPHost
 	addr := fmt.Sprintf("%s:%d", host, s.cfg.SMTPPort)
-	auth := smtp.PlainAuth("", s.cfg.SMTPUser, s.cfg.SMTPPass, host)
+	var auth smtp.Auth
+	if s.cfg.SMTPAuth == "login" {
+		auth = newLoginAuth(s.cfg.SMTPUser, s.cfg.SMTPPass)
+	} else {
+		auth = smtp.PlainAuth("", s.cfg.SMTPUser, s.cfg.SMTPPass, host)
+	}
 
 	if s.cfg.SMTPSecure && s.cfg.SMTPPort == 465 {
 		return sendImplicitTLS(ctx, addr, host, auth, s.cfg.SMTPFrom, []string{toEmail}, msg)
@@ -155,4 +161,42 @@ func sendMailClient(c *smtp.Client, auth smtp.Auth, from string, to []string, ms
 		return fmt.Errorf("smtp close writer: %w", err)
 	}
 	return c.Quit()
+}
+
+func isLocalSMTPHost(name string) bool {
+	return name == "localhost" || name == "127.0.0.1" || name == "::1"
+}
+
+// loginAuth реализует SMTP AUTH LOGIN; не сравнивает имя хоста с полем PlainAuth,
+// но требует TLS (аналогично ограничению PlainAuth в стандартной библиотеке).
+type loginAuth struct {
+	username, password string
+	step               int
+}
+
+func newLoginAuth(username, password string) smtp.Auth {
+	return &loginAuth{username: username, password: password}
+}
+
+func (a *loginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	if !server.TLS && !isLocalSMTPHost(server.Name) {
+		return "", nil, errors.New("smtp LoginAuth: требуется TLS или localhost")
+	}
+	a.step = 0
+	return "LOGIN", nil, nil
+}
+
+func (a *loginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+	if !more {
+		return nil, nil
+	}
+	a.step++
+	switch a.step {
+	case 1:
+		return []byte(a.username), nil
+	case 2:
+		return []byte(a.password), nil
+	default:
+		return nil, fmt.Errorf("smtp LoginAuth: неожиданный шаг %d", a.step)
+	}
 }
