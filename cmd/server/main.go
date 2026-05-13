@@ -49,6 +49,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
+	if cfg.AppEnv == "development" {
+		log.Printf("SMTP (без секретов): %s:%d user=%s from=%s secure=%v",
+			cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPFrom, cfg.SMTPSecure)
+	}
 
 	// ========== MONGODB ==========
 	ctx := context.Background()
