@@ -14,6 +14,7 @@ import (
 	"github.com/lab2/rest-api/internal/auth/repository"
 	"github.com/lab2/rest-api/internal/cache"
 	filerepo "github.com/lab2/rest-api/internal/file/repository"
+	"github.com/lab2/rest-api/internal/messaging"
 )
 
 // AuthService определяет интерфейс для бизнес-логики авторизации
@@ -39,6 +40,7 @@ type authServiceImpl struct {
 	fileRepo       filerepo.FileRepository
 	cacheSvc       cache.Service
 	cacheTTL       time.Duration
+	eventPub       messaging.RegistrationEventPublisher
 }
 
 // NewAuthService создаёт новый экземпляр сервиса авторизации
@@ -51,6 +53,7 @@ func NewAuthService(
 	fileRepo filerepo.FileRepository,
 	cacheSvc cache.Service,
 	cacheTTL time.Duration,
+	eventPub messaging.RegistrationEventPublisher,
 ) AuthService {
 	return &authServiceImpl{
 		userRepo:       userRepo,
@@ -61,6 +64,7 @@ func NewAuthService(
 		fileRepo:       fileRepo,
 		cacheSvc:       cacheSvc,
 		cacheTTL:       cacheTTL,
+		eventPub:       eventPub,
 	}
 }
 
@@ -97,6 +101,15 @@ func (s *authServiceImpl) Register(ctx context.Context, req *dto.RegisterRequest
 	// Сохранение в БД
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	if s.eventPub != nil {
+		eventID, pubErr := s.eventPub.PublishUserRegistered(ctx, user.ID, user.Email, user.DisplayName)
+		if pubErr != nil {
+			log.Printf("очередь: не удалось опубликовать user.registered (userId=%s): %v", user.ID, pubErr)
+		} else {
+			log.Printf("очередь: опубликовано событие user.registered (userId=%s eventId=%s)", user.ID, eventID)
+		}
 	}
 
 	return user, nil
