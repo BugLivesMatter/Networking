@@ -1,12 +1,22 @@
-# Лабораторные работы №2–7: REST API с авторизацией, Swagger, Redis, MongoDB и MinIO
+# Лабораторные работы №2–8: REST API с авторизацией, Swagger, Redis, MongoDB, MinIO и RabbitMQ
 
 ## Описание проекта
 
-RESTful API на Go (Gin + **MongoDB** + Redis) с аутентификацией, CRUD-ресурсами, кешированием и автоматической документацией OpenAPI (Swagger).
+RESTful API на Go (Gin + **MongoDB** + Redis + **RabbitMQ**) с аутентификацией, CRUD-ресурсами, кешированием и автоматической документацией OpenAPI (Swagger).
 
 > **ЛР6:** PostgreSQL полностью заменён на MongoDB 7. Подробнее об изменениях и отличиях двух СУБД — в [differences.md](differences.md).
 
 ### Что реализовано
+
+**Лабораторная работа №8 — RabbitMQ и приветственное письмо:**
+- Сервис RabbitMQ 3.12 с Management Plugin в `docker-compose` (порты `5672`, `15672`)
+- Модуль `internal/messaging`: exchange `app.events` (direct), `app.dlx`, очередь `wp.auth.user.registered` с DLX, очередь `wp.auth.user.registered.dlq`
+- После успешной регистрации (`POST /auth/register`) и при первой регистрации через OAuth публикуется JSON-событие `user.registered` (routing key `user.registered`), сообщения **persistent**, очереди **durable**
+- В том же процессе что и HTTP-сервер запускается **фоновый консьюмер**: SMTP-отправка приветственного письма (plain + HTML), **Ack** только после успеха
+- Повтор при ошибке SMTP: до **3** попыток с увеличением `metadata.attempt`, затем сообщение уходит в **DLQ** через `Nack(requeue=false)`
+- **Идемпотентность** по `eventId`: ключ в Redis `wp:events:processed:{eventId}` с TTL 24 часа
+- Модуль `internal/email`: конфигурация SMTP из `.env`, без логирования паролей
+- При старте приложения выполняется **валидация** обязательных переменных RabbitMQ и SMTP
 
 **Лабораторная работа №7 — MinIO Object Storage + файлы:**
 - Добавлен сервис MinIO в `docker-compose` и конфигурация в `.env`
@@ -113,6 +123,20 @@ MINIO_BUCKET=wp-labs-files
 MINIO_USE_SSL=false
 MAX_FILE_SIZE=10485760
 
+# === RabbitMQ (ЛР8) ===
+RABBITMQ_USER=student
+RABBITMQ_PASS=student_secure_rabbit_pass_change_in_prod
+QUEUE_USER_REGISTERED=wp.auth.user.registered
+
+# === SMTP (ЛР8) ===
+SMTP_HOST=smtp.yandex.ru
+SMTP_PORT=465
+SMTP_USER=your_email@yandex.ru
+SMTP_PASS=your_app_password
+SMTP_FROM=your_email@yandex.ru
+SMTP_SECURE=true
+APP_PUBLIC_URL=http://localhost:4200
+
 # === App ===
 APP_ENV=development
 ```
@@ -131,7 +155,7 @@ API: **`http://localhost:4200`**
 
 ```bash
 docker-compose down
-docker-compose down -v   # удалит тома MongoDB, Redis и MinIO
+docker-compose down -v   # удалит тома MongoDB, Redis, MinIO и RabbitMQ
 ```
 
 ---
@@ -164,6 +188,65 @@ DEL wp:categories:list:page:1:limit:10
 3. Запрос к защищённому ресурсу со старым access → **401**
 
 После **перезапуска** контейнера Redis данные частично восстанавливаются за счёт **AOF** и тома; при `docker-compose down -v` кеш и JTI теряются.
+
+---
+
+## RabbitMQ (ЛР8)
+
+### Management UI
+
+- URL: **http://localhost:15672**
+- Логин и пароль: значения `RABBITMQ_USER` и `RABBITMQ_PASS` из `.env`.
+
+### Схема обмена сообщениями
+
+```mermaid
+flowchart LR
+  subgraph http [HTTP]
+    Register[POST /auth/register]
+  end
+  subgraph app [Процесс app]
+    Producer[Publisher internal/messaging]
+    Consumer[Consumer горутина]
+    SMTP[SMTP welcome email]
+  end
+  subgraph broker [RabbitMQ]
+    Ex[app.events direct]
+    Q[wp.auth.user.registered]
+    DLX[app.dlx]
+    DLQ[wp.auth.user.registered.dlq]
+  end
+  subgraph cache [Redis]
+    Idem[wp:events:processed:eventId]
+  end
+  Register --> Producer
+  Producer -->|"user.registered persistent"| Ex
+  Ex --> Q
+  Q --> Consumer
+  Consumer --> SMTP
+  Consumer --> Idem
+  Q -->|Nack no requeue после 3 попыток| DLX
+  DLX --> DLQ
+```
+
+### Очереди и ключи
+
+| Имя | Назначение |
+|-----|------------|
+| `app.events` | Direct exchange для доменных событий |
+| `user.registered` | Routing key → очередь регистраций |
+| `wp.auth.user.registered` | Основная очередь обработки |
+| `app.dlx` | Dead letter exchange |
+| `wp.auth.user.registered.dlq` | Очередь «ядовитых» / исчерпавших попытки сообщений |
+
+### Ручная проверка ЛР8 (чек-лист)
+
+1. Заполнить в `.env` **реальные** SMTP-параметры (пароль приложения для почтового ящика).
+2. `docker compose up --build` — дождаться healthy у `rabbitmq` и `app`.
+3. **Happy path:** `POST /auth/register` с новым email → в логах `app` строка об публикации `eventId` → в UI очереди `wp.auth.user.registered` сообщение исчезает после обработки → на почте **одно** приветственное письмо.
+4. **Идемпотентность:** в Management UI опубликовать в `app.events` с routing key `user.registered` копию JSON с тем же `eventId`, что уже обработан → второе письмо **не** приходит.
+5. **Retry и DLQ:** задать неверный `SMTP_PASS`, выполнить одну регистрацию → в логах три попытки для одного события → сообщение оказывается в `wp.auth.user.registered.dlq`.
+6. **Накопление:** сломать `SMTP_HOST`, сделать несколько регистраций → счётчик Ready в основной очереди растёт; починить SMTP и перезапустить `app` → сообщения обрабатываются.
 
 ---
 
@@ -285,6 +368,16 @@ curl -X POST http://localhost:4200/profile \
   -H "Content-Type: application/json" \
   -b cookies.txt \
   -d "{\"displayName\":\"Иван Иванов\",\"bio\":\"Backend разработчик\",\"avatarFileId\":\"<fileId>\"}"
+```
+
+### Регистрация (публикация события в RabbitMQ, ЛР8)
+
+После успешного ответа **201** в логах контейнера `app` появится строка об опубликованном `eventId`; консьюмер отправит приветственное письмо на указанный email.
+
+```bash
+curl -X POST http://localhost:4200/auth/register \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"newuser@example.com\",\"password\":\"SecurePass123!\",\"phone\":\"\"}"
 ```
 
 ### Health
