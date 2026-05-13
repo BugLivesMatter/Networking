@@ -51,12 +51,14 @@ type Config struct {
 	QueueRegistered string
 
 	// SMTP (ЛР8)
-	SMTPHost     string
-	SMTPPort     int
-	SMTPUser     string
-	SMTPPass     string
-	SMTPFrom     string
-	SMTPSecure   bool
+	SMTPHost   string
+	SMTPPort   int
+	SMTPUser   string
+	SMTPPass   string
+	SMTPFrom   string
+	SMTPSecure bool
+	// SMTPAuth: "plain" (по умолчанию, net/smtp.PlainAuth) или "login" (AUTH LOGIN — иногда удобнее с провайдерами).
+	SMTPAuth     string
 	AppPublicURL string
 }
 
@@ -72,6 +74,11 @@ func Load() (*Config, error) {
 	rmqPort, _ := strconv.Atoi(getEnv("RABBITMQ_PORT", "5672"))
 	smtpPort, _ := strconv.Atoi(getEnv("SMTP_PORT", "587"))
 	smtpSecure, _ := strconv.ParseBool(getEnv("SMTP_SECURE", "false"))
+
+	smtpAuth := strings.ToLower(strings.TrimSpace(getEnv("SMTP_AUTH", "plain")))
+	if smtpAuth == "" {
+		smtpAuth = "plain"
+	}
 
 	cfg := &Config{
 		MongoURI:    getEnv("MONGO_URI", "mongodb://localhost:27017"),
@@ -111,12 +118,13 @@ func Load() (*Config, error) {
 		RabbitMQPass:    getEnv("RABBITMQ_PASS", ""),
 		QueueRegistered: getEnv("QUEUE_USER_REGISTERED", "wp.auth.user.registered"),
 
-		SMTPHost:     getEnv("SMTP_HOST", ""),
+		SMTPHost:     strings.TrimSpace(getEnv("SMTP_HOST", "")),
 		SMTPPort:     smtpPort,
-		SMTPUser:     getEnv("SMTP_USER", ""),
-		SMTPPass:     getEnv("SMTP_PASS", ""),
-		SMTPFrom:     getEnv("SMTP_FROM", ""),
+		SMTPUser:     strings.TrimSpace(getEnv("SMTP_USER", "")),
+		SMTPPass:     strings.TrimSpace(getEnv("SMTP_PASS", "")),
+		SMTPFrom:     strings.TrimSpace(getEnv("SMTP_FROM", "")),
 		SMTPSecure:   smtpSecure,
+		SMTPAuth:     smtpAuth,
 		AppPublicURL: strings.TrimRight(getEnv("APP_PUBLIC_URL", "http://localhost:4200"), "/"),
 	}
 	if err := cfg.validateMessaging(); err != nil {
@@ -150,6 +158,9 @@ func (c *Config) validateMessaging() error {
 	}
 	if c.SMTPPort <= 0 || c.SMTPPort > 65535 {
 		return fmt.Errorf("конфигурация: некорректный SMTP_PORT")
+	}
+	if c.SMTPAuth != "plain" && c.SMTPAuth != "login" {
+		return fmt.Errorf("конфигурация: SMTP_AUTH должен быть plain или login (сейчас %q)", c.SMTPAuth)
 	}
 	if err := c.validateYandexSMTPFrom(); err != nil {
 		return err
