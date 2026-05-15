@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +20,7 @@ import (
 	"github.com/lab2/rest-api/internal/auth/dto"
 	"github.com/lab2/rest-api/internal/auth/repository"
 	"github.com/lab2/rest-api/internal/cache"
+	"github.com/lab2/rest-api/internal/messaging"
 )
 
 // OAuthService определяет интерфейс для OAuth авторизации
@@ -35,6 +38,7 @@ type oauthServiceImpl struct {
 	cacheSvc  cache.Service
 	cacheTTL  time.Duration
 	config    *OAuthConfig
+	eventPub  messaging.RegistrationEventPublisher
 }
 
 // OAuthConfig содержит конфигурацию OAuth провайдеров
@@ -53,6 +57,7 @@ func NewOAuthService(
 	cacheSvc cache.Service,
 	cacheTTL time.Duration,
 	config *OAuthConfig,
+	eventPub messaging.RegistrationEventPublisher,
 ) OAuthService {
 	return &oauthServiceImpl{
 		userRepo:  userRepo,
@@ -62,6 +67,7 @@ func NewOAuthService(
 		cacheSvc:  cacheSvc,
 		cacheTTL:  cacheTTL,
 		config:    config,
+		eventPub:  eventPub,
 	}
 }
 
@@ -136,6 +142,18 @@ func (s *oauthServiceImpl) handleYandexCallback(ctx context.Context, code, state
 
 		if err := s.userRepo.Create(ctx, user); err != nil {
 			return nil, nil, fmt.Errorf("failed to create user: %w", err)
+		}
+		displayName := strings.TrimSpace(yandexUser.FirstName + " " + yandexUser.LastName)
+		if displayName == "" {
+			displayName = strings.TrimSpace(yandexUser.Login)
+		}
+		if s.eventPub != nil && user.Email != "" {
+			eventID, pubErr := s.eventPub.PublishUserRegistered(ctx, user.ID, user.Email, displayName)
+			if pubErr != nil {
+				log.Printf("очередь: не удалось опубликовать user.registered после OAuth (userId=%s): %v", user.ID, pubErr)
+			} else {
+				log.Printf("очередь: опубликовано user.registered после OAuth (userId=%s eventId=%s)", user.ID, eventID)
+			}
 		}
 	}
 

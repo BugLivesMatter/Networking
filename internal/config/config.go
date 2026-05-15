@@ -1,8 +1,11 @@
 package config
 
 import (
+	"fmt"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -39,6 +42,24 @@ type Config struct {
 	MinIOBucket    string
 	MinIOUseSSL    bool
 	MaxFileSize    int64
+
+	// RabbitMQ (ЛР8)
+	RabbitMQHost    string
+	RabbitMQPort    int
+	RabbitMQUser    string
+	RabbitMQPass    string
+	QueueRegistered string
+
+	// SMTP (ЛР8)
+	SMTPHost   string
+	SMTPPort   int
+	SMTPUser   string
+	SMTPPass   string
+	SMTPFrom   string
+	SMTPSecure bool
+	// SMTPAuth: "plain" (по умолчанию, net/smtp.PlainAuth) или "login" (AUTH LOGIN — иногда удобнее с провайдерами).
+	SMTPAuth     string
+	AppPublicURL string
 }
 
 func Load() (*Config, error) {
@@ -50,6 +71,14 @@ func Load() (*Config, error) {
 	cacheEnabled, _ := strconv.ParseBool(getEnv("CACHE_ENABLED", "true"))
 	minioUseSSL, _ := strconv.ParseBool(getEnv("MINIO_USE_SSL", "false"))
 	maxFileSize, _ := strconv.ParseInt(getEnv("MAX_FILE_SIZE", "10485760"), 10, 64)
+	rmqPort, _ := strconv.Atoi(getEnv("RABBITMQ_PORT", "5672"))
+	smtpPort, _ := strconv.Atoi(getEnv("SMTP_PORT", "587"))
+	smtpSecure, _ := strconv.ParseBool(getEnv("SMTP_SECURE", "false"))
+
+	smtpAuth := strings.ToLower(strings.TrimSpace(getEnv("SMTP_AUTH", "plain")))
+	if smtpAuth == "" {
+		smtpAuth = "plain"
+	}
 
 	cfg := &Config{
 		MongoURI:    getEnv("MONGO_URI", "mongodb://localhost:27017"),
@@ -82,8 +111,91 @@ func Load() (*Config, error) {
 		MinIOBucket:    getEnv("MINIO_BUCKET", "wp-labs-files"),
 		MinIOUseSSL:    minioUseSSL,
 		MaxFileSize:    maxFileSize,
+
+		RabbitMQHost:    getEnv("RABBITMQ_HOST", "localhost"),
+		RabbitMQPort:    rmqPort,
+		RabbitMQUser:    getEnv("RABBITMQ_USER", ""),
+		RabbitMQPass:    getEnv("RABBITMQ_PASS", ""),
+		QueueRegistered: getEnv("QUEUE_USER_REGISTERED", "wp.auth.user.registered"),
+
+		SMTPHost:     strings.TrimSpace(getEnv("SMTP_HOST", "")),
+		SMTPPort:     smtpPort,
+		SMTPUser:     strings.TrimSpace(getEnv("SMTP_USER", "")),
+		SMTPPass:     strings.TrimSpace(getEnv("SMTP_PASS", "")),
+		SMTPFrom:     strings.TrimSpace(getEnv("SMTP_FROM", "")),
+		SMTPSecure:   smtpSecure,
+		SMTPAuth:     smtpAuth,
+		AppPublicURL: strings.TrimRight(getEnv("APP_PUBLIC_URL", "http://localhost:4200"), "/"),
+	}
+	if err := cfg.validateMessaging(); err != nil {
+		return nil, err
 	}
 	return cfg, nil
+}
+
+// validateMessaging проверяет обязательные параметры RabbitMQ и SMTP (ЛР8).
+func (c *Config) validateMessaging() error {
+	if strings.TrimSpace(c.RabbitMQUser) == "" {
+		return fmt.Errorf("конфигурация: не задан RABBITMQ_USER")
+	}
+	if strings.TrimSpace(c.RabbitMQPass) == "" {
+		return fmt.Errorf("конфигурация: не задан RABBITMQ_PASS")
+	}
+	if strings.EqualFold(c.RabbitMQUser, "guest") && strings.EqualFold(c.RabbitMQPass, "guest") {
+		return fmt.Errorf("конфигурация: запрещена связка guest/guest для RabbitMQ")
+	}
+	if strings.TrimSpace(c.SMTPHost) == "" {
+		return fmt.Errorf("конфигурация: не задан SMTP_HOST")
+	}
+	if strings.TrimSpace(c.SMTPUser) == "" {
+		return fmt.Errorf("конфигурация: не задан SMTP_USER")
+	}
+	if strings.TrimSpace(c.SMTPPass) == "" {
+		return fmt.Errorf("конфигурация: не задан SMTP_PASS")
+	}
+	if strings.TrimSpace(c.SMTPFrom) == "" {
+		return fmt.Errorf("конфигурация: не задан SMTP_FROM")
+	}
+	if c.SMTPPort <= 0 || c.SMTPPort > 65535 {
+		return fmt.Errorf("конфигурация: некорректный SMTP_PORT")
+	}
+	if c.SMTPAuth != "plain" && c.SMTPAuth != "login" {
+		return fmt.Errorf("конфигурация: SMTP_AUTH должен быть plain или login (сейчас %q)", c.SMTPAuth)
+	}
+	if err := c.validateYandexSMTPFrom(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// smtpMailboxFromField извлекает адрес из поля From (поддержка вида "Имя <user@host>").
+func smtpMailboxFromField(from string) string {
+	from = strings.TrimSpace(from)
+	if i := strings.LastIndex(from, "<"); i >= 0 {
+		if j := strings.LastIndex(from, ">"); j > i {
+			return strings.TrimSpace(from[i+1 : j])
+		}
+	}
+	return from
+}
+
+// validateYandexSMTPFrom: у Яндекс.Pочты отправитель MAIL FROM должен совпадать с учётной записью SMTP,
+// иначе типичная ошибка 535 5.7.8 "This user does not have access rights to this service".
+func (c *Config) validateYandexSMTPFrom() error {
+	host := strings.ToLower(strings.TrimSpace(c.SMTPHost))
+	if !strings.Contains(host, "yandex") {
+		return nil
+	}
+	fromBox := strings.ToLower(smtpMailboxFromField(c.SMTPFrom))
+	userBox := strings.ToLower(strings.TrimSpace(c.SMTPUser))
+	if fromBox != userBox {
+		return fmt.Errorf(
+			"конфигурация SMTP (Яндекс): адрес в SMTP_FROM (%q → %s) должен совпадать с SMTP_USER (%q); "+
+				"иначе сервер отвечает 535 «нет прав на сервис». Укажите один и тот же ящик или добавьте алиас в настройках Почты",
+			c.SMTPFrom, fromBox, c.SMTPUser,
+		)
+	}
+	return nil
 }
 
 func getEnv(key, defaultVal string) string {
@@ -91,4 +203,15 @@ func getEnv(key, defaultVal string) string {
 		return v
 	}
 	return defaultVal
+}
+
+// AMQPURI возвращает URI подключения к RabbitMQ.
+func (c *Config) AMQPURI() string {
+	u := url.URL{
+		Scheme: "amqp",
+		Host:   fmt.Sprintf("%s:%d", c.RabbitMQHost, c.RabbitMQPort),
+		User:   url.UserPassword(c.RabbitMQUser, c.RabbitMQPass),
+		Path:   "/",
+	}
+	return u.String()
 }
