@@ -608,11 +608,11 @@ definitions:
 host: localhost:4200
 info:
   contact: {}
-  description: 'REST API: категории и продукты (CRUD), JWT + OAuth2, Redis (кеш списков
-    и профиля, JTI access в Redis), MongoDB вместо PostgreSQL. Health-эндпоинты для
-    мониторинга Redis и диагностики латентности MongoDB vs кеша.'
-  title: Lab 2–6 REST API
-  version: "1.2"
+  description: 'REST API: категории и продукты (CRUD), JWT + OAuth2, Redis, MongoDB,
+    MinIO, RabbitMQ (асинхронная отправка приветственного email при регистрации).
+    Health-эндпоинты для мониторинга Redis и диагностики MongoDB vs кеша.'
+  title: Lab 2–8 REST API
+  version: "1.3"
 paths:
   /auth/forgot-password:
     post:

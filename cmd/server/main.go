@@ -1,6 +1,6 @@
-// @title Lab 2–6 REST API
-// @version 1.2
-// @description REST API: категории и продукты (CRUD), JWT + OAuth2, Redis (кеш списков и профиля, JTI access в Redis), MongoDB вместо PostgreSQL. Health-эндпоинты для мониторинга Redis и диагностики латентности MongoDB vs кеша.
+// @title Lab 2–8 REST API
+// @version 1.3
+// @description REST API: категории и продукты (CRUD), JWT + OAuth2, Redis, MongoDB, MinIO, RabbitMQ (асинхронная отправка приветственного email при регистрации). Health-эндпоинты для мониторинга Redis и диагностики MongoDB vs кеша.
 // @host localhost:4200
 // @BasePath /
 // @securityDefinitions.apikey CookieAuth
@@ -23,6 +23,7 @@ import (
 	categorysvc "github.com/lab2/rest-api/internal/category/service"
 	"github.com/lab2/rest-api/internal/config"
 	"github.com/lab2/rest-api/internal/database"
+	"github.com/lab2/rest-api/internal/email"
 	filehandler "github.com/lab2/rest-api/internal/file/handler"
 	filerepo "github.com/lab2/rest-api/internal/file/repository"
 	fileservice "github.com/lab2/rest-api/internal/file/service"
@@ -39,6 +40,7 @@ import (
 	authmiddleware "github.com/lab2/rest-api/internal/auth/middleware"
 	authrepo "github.com/lab2/rest-api/internal/auth/repository"
 	authservice "github.com/lab2/rest-api/internal/auth/service"
+	"github.com/lab2/rest-api/internal/messaging"
 	"github.com/lab2/rest-api/internal/storage"
 )
 
@@ -46,6 +48,10 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("load config: %v", err)
+	}
+	if cfg.AppEnv == "development" {
+		log.Printf("SMTP (без секретов): %s:%d user=%s from=%s secure=%v auth=%s",
+			cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPFrom, cfg.SMTPSecure, cfg.SMTPAuth)
 	}
 
 	// ========== MONGODB ==========
@@ -78,6 +84,29 @@ func main() {
 	}
 	cacheService := cache.NewService(cacheClient, cfg.CacheEnabled)
 
+	// ========== RabbitMQ + фоновый консьюмер (ЛР8) ==========
+	rmqConn, err := messaging.DialAMQP(cfg.AMQPURI())
+	if err != nil {
+		log.Fatalf("подключение к RabbitMQ: %v", err)
+	}
+	defer rmqConn.Close()
+
+	rmqPubCh, err := rmqConn.Channel()
+	if err != nil {
+		log.Fatalf("канал RabbitMQ (publisher): %v", err)
+	}
+	if err := messaging.DeclareTopology(rmqPubCh, cfg.QueueRegistered); err != nil {
+		log.Fatalf("топология RabbitMQ: %v", err)
+	}
+	eventPublisher := messaging.NewPublisher(rmqPubCh)
+	mailSender := email.NewSender(cfg)
+
+	rmqConsCh, err := rmqConn.Channel()
+	if err != nil {
+		log.Fatalf("канал RabbitMQ (consumer): %v", err)
+	}
+	go messaging.RunUserRegisteredConsumer(context.Background(), rmqConsCh, cfg.QueueRegistered, cacheService, mailSender, eventPublisher)
+
 	storageService, err := storage.NewMinIOService(cfg)
 	if err != nil {
 		log.Fatalf("init minio service: %v", err)
@@ -109,6 +138,7 @@ func main() {
 		fileRepo,
 		cacheService,
 		cfg.CacheTTLDefault,
+		eventPublisher,
 	)
 
 	authHandler := authhandler.NewAuthHandler(authService)
@@ -128,6 +158,7 @@ func main() {
 		cacheService,
 		cfg.CacheTTLDefault,
 		oauthConfig,
+		eventPublisher,
 	)
 	oauthHandler := authhandler.NewOAuthHandler(oauthService)
 

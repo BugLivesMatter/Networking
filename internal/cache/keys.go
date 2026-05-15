@@ -42,3 +42,8 @@ func UserAccessJTIPattern(userID uuid.UUID) string {
 func FileMetaKey(fileID uuid.UUID) string {
 	return fmt.Sprintf("%s:files:%s:meta", appPrefix, fileID.String())
 }
+
+// EventProcessedKey — идемпотентность обработки событий (ЛР8), TTL задаётся при Set.
+func EventProcessedKey(eventID string) string {
+	return fmt.Sprintf("%s:events:processed:%s", appPrefix, eventID)
+}

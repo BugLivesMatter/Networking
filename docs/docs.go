@@ -2625,12 +2625,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.2",
+	Version:          "1.3",
 	Host:             "localhost:4200",
 	BasePath:         "/",
 	Schemes:          []string{},
-	Title:            "Lab 2–6 REST API",
-	Description:      "REST API: категории и продукты (CRUD), JWT + OAuth2, Redis (кеш списков и профиля, JTI access в Redis), MongoDB вместо PostgreSQL. Health-эндпоинты для мониторинга Redis и диагностики латентности MongoDB vs кеша.",
+	Title:            "Lab 2–8 REST API",
+	Description:      "REST API: категории и продукты (CRUD), JWT + OAuth2, Redis, MongoDB, MinIO, RabbitMQ (асинхронная отправка приветственного email при регистрации). Health-эндпоинты для мониторинга Redis и диагностики MongoDB vs кеша.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",
