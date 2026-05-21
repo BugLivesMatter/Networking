@@ -13,14 +13,21 @@ import (
 	"github.com/lab2/rest-api/internal/email"
 )
 
-const eventProcessedTTL = 24 * time.Hour
+const (
+	eventProcessedTTL = 24 * time.Hour
+	lockTTL           = 30 * time.Second
+)
 
 // RunUserRegisteredConsumer обрабатывает очередь регистраций в фоне (ack после успешной отправки SMTP).
+// instanceID — уникальный идентификатор экземпляра пода (hostname + UUID), используется
+// как owner в Redis distributed lock для предотвращения дублирования при нескольких репликах.
 func RunUserRegisteredConsumer(
 	ctx context.Context,
 	ch *amqp091.Channel,
 	mainQueue string,
 	cacheSvc cache.Service,
+	lock *cache.DistributedLock,
+	instanceID string,
 	mailer *email.Sender,
 	pub *Publisher,
 ) {
@@ -41,7 +48,7 @@ func RunUserRegisteredConsumer(
 		return
 	}
 
-	log.Printf("консьюмер RabbitMQ: ожидание сообщений в очереди %q", mainQueue)
+	log.Printf("консьюмер RabbitMQ: ожидание сообщений в очереди %q (instanceID=%s)", mainQueue, instanceID)
 
 	for {
 		select {
@@ -53,7 +60,7 @@ func RunUserRegisteredConsumer(
 				log.Printf("консьюмер RabbitMQ: канал доставки закрыт")
 				return
 			}
-			handleUserRegisteredDelivery(ctx, d, cacheSvc, mailer, pub)
+			handleUserRegisteredDelivery(ctx, d, cacheSvc, lock, instanceID, mailer, pub)
 		}
 	}
 }
@@ -62,6 +69,8 @@ func handleUserRegisteredDelivery(
 	ctx context.Context,
 	d amqp091.Delivery,
 	cacheSvc cache.Service,
+	lock *cache.DistributedLock,
+	instanceID string,
 	mailer *email.Sender,
 	pub *Publisher,
 ) {
@@ -78,6 +87,8 @@ func handleUserRegisteredDelivery(
 	}
 
 	processedKey := cache.EventProcessedKey(msg.EventID)
+
+	// Оптимистичная проверка идемпотентности до захвата блокировки — быстрый выход.
 	exists, err := cacheSvc.Exists(ctx, processedKey)
 	if err != nil {
 		log.Printf("консьюмер RabbitMQ: ошибка Redis при проверке идемпотентности eventId=%s: %v", msg.EventID, err)
@@ -90,6 +101,39 @@ func handleUserRegisteredDelivery(
 		return
 	}
 
+	// Distributed lock: при нескольких репликах гарантирует, что критическую секцию
+	// выполняет только один экземпляр. При rdb == nil — no-op.
+	lockKey := cache.EventLockKey(msg.EventID)
+	acquired, lockErr := lock.Acquire(ctx, lockKey, instanceID, lockTTL)
+	if lockErr != nil {
+		log.Printf("консьюмер RabbitMQ: ошибка захвата блокировки eventId=%s: %v", msg.EventID, lockErr)
+		_ = d.Nack(true, true)
+		return
+	}
+	if !acquired {
+		log.Printf("консьюмер RabbitMQ: блокировка занята другим экземпляром, пропуск (eventId=%s)", msg.EventID)
+		_ = d.Ack(false)
+		return
+	}
+	defer func() {
+		if releaseErr := lock.Release(ctx, lockKey, instanceID); releaseErr != nil {
+			log.Printf("консьюмер RabbitMQ: ошибка освобождения блокировки eventId=%s: %v", msg.EventID, releaseErr)
+		}
+	}()
+
+	// Double-check идемпотентности после захвата блокировки (race condition window).
+	exists, err = cacheSvc.Exists(ctx, processedKey)
+	if err != nil {
+		log.Printf("консьюмер RabbitMQ: ошибка Redis (double-check) eventId=%s: %v", msg.EventID, err)
+		_ = d.Nack(true, true)
+		return
+	}
+	if exists {
+		log.Printf("консьюмер RabbitMQ: событие обработано другим экземпляром (double-check), пропуск (eventId=%s)", msg.EventID)
+		_ = d.Ack(false)
+		return
+	}
+
 	userID, err := uuid.Parse(msg.Payload.UserID)
 	if err != nil {
 		log.Printf("консьюмер RabbitMQ: некорректный userId в сообщении eventId=%s", msg.EventID)
@@ -97,8 +141,8 @@ func handleUserRegisteredDelivery(
 		return
 	}
 
-	log.Printf("консьюмер RabbitMQ: попытка отправки письма eventId=%s attempt=%d userId=%s",
-		msg.EventID, msg.Metadata.Attempt, userID)
+	log.Printf("консьюмер RabbitMQ: попытка отправки письма eventId=%s attempt=%d userId=%s instanceID=%s",
+		msg.EventID, msg.Metadata.Attempt, userID, instanceID)
 
 	sendErr := mailer.SendWelcome(ctx, msg.Payload.Email, msg.Payload.DisplayName, userID)
 	if sendErr == nil {

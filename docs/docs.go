@@ -1009,6 +1009,49 @@ const docTemplate = `{
             }
         },
         "/files": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "Список файлов текущего пользователя",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.FileResponse"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
@@ -1214,6 +1257,55 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/health.DiagnosisResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/health/live": {
+            "get": {
+                "description": "Минимальная проверка: процесс жив. Без обращений к внешним сервисам.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Liveness probe (K8s)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/health/ready": {
+            "get": {
+                "description": "Проверяет подключение к MongoDB, Redis и RabbitMQ. 503 при деградации.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Readiness probe (K8s)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/health.readyResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/health.readyResponse"
                         }
                     }
                 }
@@ -2592,6 +2684,37 @@ const docTemplate = `{
                 }
             }
         },
+        "health.checkResult": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "latency_ms": {
+                    "type": "number"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "health.readyResponse": {
+            "type": "object",
+            "properties": {
+                "checks": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/health.checkResult"
+                    }
+                },
+                "status": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
         "pagination.Meta": {
             "type": "object",
             "properties": {
@@ -2625,12 +2748,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.3",
+	Version:          "1.4",
 	Host:             "localhost:4200",
 	BasePath:         "/",
 	Schemes:          []string{},
-	Title:            "Lab 2–8 REST API",
-	Description:      "REST API: категории и продукты (CRUD), JWT + OAuth2, Redis, MongoDB, MinIO, RabbitMQ (асинхронная отправка приветственного email при регистрации). Health-эндпоинты для мониторинга Redis и диагностики MongoDB vs кеша.",
+	Title:            "Lab 2–9 REST API",
+	Description:      "REST API на Go (Gin + MongoDB + Redis + MinIO + RabbitMQ) с JWT/OAuth2-аутентификацией, CRUD-ресурсами, файловым хранилищем, асинхронной обработкой событий и Kubernetes-деплоем. ЛР9: health-зонды (/health/live, /health/ready), K8s-манифесты, горизонтальное масштабирование, Redis distributed lock.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

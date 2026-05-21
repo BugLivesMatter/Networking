@@ -1,6 +1,6 @@
-// @title Lab 2–8 REST API
-// @version 1.3
-// @description REST API: категории и продукты (CRUD), JWT + OAuth2, Redis, MongoDB, MinIO, RabbitMQ (асинхронная отправка приветственного email при регистрации). Health-эндпоинты для мониторинга Redis и диагностики MongoDB vs кеша.
+// @title Lab 2–9 REST API
+// @version 1.4
+// @description REST API на Go (Gin + MongoDB + Redis + MinIO + RabbitMQ) с JWT/OAuth2-аутентификацией, CRUD-ресурсами, файловым хранилищем, асинхронной обработкой событий и Kubernetes-деплоем. ЛР9: health-зонды (/health/live, /health/ready), K8s-манифесты, горизонтальное масштабирование, Redis distributed lock.
 // @host localhost:4200
 // @BasePath /
 // @securityDefinitions.apikey CookieAuth
@@ -13,7 +13,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lab2/rest-api/docs"
@@ -105,7 +108,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("канал RabbitMQ (consumer): %v", err)
 	}
-	go messaging.RunUserRegisteredConsumer(context.Background(), rmqConsCh, cfg.QueueRegistered, cacheService, mailSender, eventPublisher)
+	instanceID := fmt.Sprintf("%s:%s", getHostname(), uuid.New().String())
+	distLock := cache.NewDistributedLock(cacheClient)
+	go messaging.RunUserRegisteredConsumer(context.Background(), rmqConsCh, cfg.QueueRegistered, cacheService, distLock, instanceID, mailSender, eventPublisher)
 
 	storageService, err := storage.NewMinIOService(cfg)
 	if err != nil {
@@ -213,6 +218,8 @@ func main() {
 		})
 	}
 
+	r.GET("/health/live", health.LiveHandler())
+	r.GET("/health/ready", health.ReadyHandler(mongoDB, cacheClient, rmqConn))
 	r.GET("/health/redis", cache.StatusHandler(cacheService))
 	r.GET("/health/diagnosis", health.DiagnosisHandler(mongoDB, cacheClient, categoryRepo, cacheService, cfg.CacheTTLDefault))
 
@@ -276,8 +283,16 @@ func main() {
 	}
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
-	log.Printf("server listening on %s", addr)
+	log.Printf("server listening on %s (instanceID=%s)", addr, instanceID)
 	if err := http.ListenAndServe(addr, r); err != nil {
 		log.Fatalf("serve: %v", err)
 	}
+}
+
+func getHostname() string {
+	h, err := os.Hostname()
+	if err != nil {
+		return "unknown"
+	}
+	return h
 }
