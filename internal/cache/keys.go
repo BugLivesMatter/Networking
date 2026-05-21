@@ -47,3 +47,8 @@ func FileMetaKey(fileID uuid.UUID) string {
 func EventProcessedKey(eventID string) string {
 	return fmt.Sprintf("%s:events:processed:%s", appPrefix, eventID)
 }
+
+// EventLockKey — ключ распределённой блокировки для обработки событий (ЛР9).
+func EventLockKey(eventID string) string {
+	return fmt.Sprintf("%s:lock:event:%s", appPrefix, eventID)
+}

@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config
+  namespace: wp-labs
+data:
+  APP_ENV: "development"
+  PORT: "4200"
+  CACHE_ENABLED: "true"
+  CACHE_TTL_DEFAULT: "300"
+  JWT_ACCESS_EXPIRATION: "15m"
+  JWT_REFRESH_EXPIRATION: "168h"
+  YANDEX_CALLBACK_URL: "http://localhost:4200/auth/oauth/yandex/callback"
+  REDIS_HOST: "redis.wp-labs.svc.cluster.local"
+  REDIS_PORT: "6379"
+  MONGO_DB_NAME: "wp_labs"
+  MINIO_ENDPOINT: "minio.wp-labs.svc.cluster.local:9000"
+  MINIO_BUCKET: "wp-labs-files"
+  MINIO_USE_SSL: "false"
+  MAX_FILE_SIZE: "10485760"
+  RABBITMQ_HOST: "rabbitmq-0.rabbitmq.wp-labs.svc.cluster.local"
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_USER: "student"
+  QUEUE_USER_REGISTERED: "wp.auth.user.registered"
+  SMTP_HOST: "smtp.yandex.com"
+  SMTP_PORT: "465"
+  SMTP_SECURE: "true"
+  SMTP_AUTH: "plain"
+  APP_PUBLIC_URL: "http://localhost:4200"

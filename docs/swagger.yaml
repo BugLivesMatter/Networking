@@ -590,6 +590,26 @@ definitions:
       redis:
         $ref: '#/definitions/health.DiagnosisRedisSection'
     type: object
+  health.checkResult:
+    properties:
+      error:
+        type: string
+      latency_ms:
+        type: number
+      status:
+        type: string
+    type: object
+  health.readyResponse:
+    properties:
+      checks:
+        additionalProperties:
+          $ref: '#/definitions/health.checkResult'
+        type: object
+      status:
+        type: string
+      timestamp:
+        type: string
+    type: object
   pagination.Meta:
     properties:
       limit:
@@ -608,11 +628,12 @@ definitions:
 host: localhost:4200
 info:
   contact: {}
-  description: 'REST API: категории и продукты (CRUD), JWT + OAuth2, Redis, MongoDB,
-    MinIO, RabbitMQ (асинхронная отправка приветственного email при регистрации).
-    Health-эндпоинты для мониторинга Redis и диагностики MongoDB vs кеша.'
-  title: Lab 2–8 REST API
-  version: "1.3"
+  description: 'REST API на Go (Gin + MongoDB + Redis + MinIO + RabbitMQ) с JWT/OAuth2-аутентификацией,
+    CRUD-ресурсами, файловым хранилищем, асинхронной обработкой событий и Kubernetes-деплоем.
+    ЛР9: health-зонды (/health/live, /health/ready), K8s-манифесты, горизонтальное
+    масштабирование, Redis distributed lock.'
+  title: Lab 2–9 REST API
+  version: "1.4"
 paths:
   /auth/forgot-password:
     post:
@@ -1255,6 +1276,33 @@ paths:
       tags:
       - categories
   /files:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.FileResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Список файлов текущего пользователя
+      tags:
+      - files
     post:
       consumes:
       - multipart/form-data
@@ -1389,6 +1437,38 @@ paths:
           schema:
             $ref: '#/definitions/health.DiagnosisResponse'
       summary: Диагностика БД и Redis (как GET /categories)
+      tags:
+      - health
+  /health/live:
+    get:
+      description: 'Минимальная проверка: процесс жив. Без обращений к внешним сервисам.'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Liveness probe (K8s)
+      tags:
+      - health
+  /health/ready:
+    get:
+      description: Проверяет подключение к MongoDB, Redis и RabbitMQ. 503 при деградации.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/health.readyResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/health.readyResponse'
+      summary: Readiness probe (K8s)
       tags:
       - health
   /health/redis:
