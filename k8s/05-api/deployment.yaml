@@ -23,8 +23,8 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: api
-          image: host.docker.internal:5000/api:1.0.0
-          imagePullPolicy: Always
+          image: api:1.0.0
+          imagePullPolicy: Never
           ports:
             - containerPort: 4200
           envFrom:

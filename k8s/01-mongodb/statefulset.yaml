@@ -41,6 +41,7 @@ spec:
               command: ["mongosh", "--eval", "db.adminCommand('ping')"]
             failureThreshold: 30
             periodSeconds: 10
+            timeoutSeconds: 10
           livenessProbe:
             exec:
               command: ["mongosh", "--eval", "db.adminCommand('ping')"]
@@ -53,7 +54,7 @@ spec:
               command: ["mongosh", "--eval", "db.adminCommand('ping')"]
             initialDelaySeconds: 30
             periodSeconds: 10
-            timeoutSeconds: 5
+            timeoutSeconds: 10
             failureThreshold: 2
           resources:
             requests:

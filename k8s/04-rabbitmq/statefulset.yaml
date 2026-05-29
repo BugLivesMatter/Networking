@@ -18,7 +18,7 @@ spec:
         fsGroup: 999
       containers:
         - name: rabbitmq
-          image: host.docker.internal:5000/rabbitmq:3.12-management-alpine
+          image: rabbitmq:3.12-management-alpine
           ports:
             - containerPort: 5672
             - containerPort: 15672
@@ -47,19 +47,20 @@ spec:
               command: ["rabbitmq-diagnostics", "-q", "ping"]
             failureThreshold: 30
             periodSeconds: 10
+            timeoutSeconds: 15
           livenessProbe:
             exec:
               command: ["rabbitmq-diagnostics", "-q", "ping"]
             initialDelaySeconds: 60
             periodSeconds: 15
-            timeoutSeconds: 10
+            timeoutSeconds: 15
             failureThreshold: 3
           readinessProbe:
             exec:
               command: ["rabbitmq-diagnostics", "-q", "check_running"]
             initialDelaySeconds: 30
             periodSeconds: 10
-            timeoutSeconds: 5
+            timeoutSeconds: 15
             failureThreshold: 2
           resources:
             requests:
