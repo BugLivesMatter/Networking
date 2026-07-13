@@ -1,5 +1,83 @@
 basePath: /
 definitions:
+  cluster.Event:
+    properties:
+      detail:
+        type: string
+      id:
+        type: string
+      serviceId:
+        type: string
+      status:
+        type: string
+      timestamp:
+        type: string
+      title:
+        type: string
+    type: object
+  cluster.Instance:
+    properties:
+      id:
+        type: string
+      latency:
+        type: integer
+      name:
+        type: string
+      restarts:
+        type: integer
+      startedAt:
+        type: string
+      status:
+        type: string
+    type: object
+  cluster.Service:
+    properties:
+      dependencies:
+        items:
+          type: string
+        type: array
+      description:
+        type: string
+      errorRate:
+        type: number
+      id:
+        type: string
+      instances:
+        items:
+          $ref: '#/definitions/cluster.Instance'
+        type: array
+      kind:
+        type: string
+      latency:
+        type: integer
+      name:
+        type: string
+      position:
+        items:
+          type: number
+        type: array
+      requestsPerMinute:
+        type: integer
+      status:
+        type: string
+      uptime:
+        type: number
+      version:
+        type: string
+    type: object
+  cluster.Snapshot:
+    properties:
+      events:
+        items:
+          $ref: '#/definitions/cluster.Event'
+        type: array
+      generatedAt:
+        type: string
+      services:
+        items:
+          $ref: '#/definitions/cluster.Service'
+        type: array
+    type: object
   apperror.ErrorResponse:
     properties:
       error:
@@ -635,6 +713,86 @@ info:
   title: Lab 2–9 REST API
   version: "1.4"
 paths:
+  /api/v1/cluster/topology:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Current cluster snapshot
+          schema:
+            $ref: '#/definitions/cluster.Snapshot'
+        "503":
+          description: Service Unavailable
+          schema:
+            type: object
+      summary: Получить topology кластера
+      tags:
+      - cluster
+  /api/v1/cluster/services/{serviceID}:
+    get:
+      produces:
+      - application/json
+      parameters:
+      - description: Идентификатор сервиса
+        in: path
+        name: serviceID
+        required: true
+        type: string
+      responses:
+        "200":
+          description: Cluster service
+          schema:
+            $ref: '#/definitions/cluster.Service'
+        "404":
+          description: Service not found
+          schema:
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            type: object
+      summary: Получить сервис кластера
+      tags:
+      - cluster
+  /api/v1/cluster/events:
+    get:
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE cluster-event stream
+          schema:
+            type: string
+      summary: SSE-поток событий кластера
+      tags:
+      - cluster
+  /api/v1/demo/scenarios/{scenario}:
+    post:
+      produces:
+      - application/json
+      parameters:
+      - description: Сценарий (latency, crash, scale, recover)
+        in: path
+        name: scenario
+        required: true
+        type: string
+      responses:
+        "200":
+          description: Updated cluster snapshot
+          schema:
+            $ref: '#/definitions/cluster.Snapshot'
+        "400":
+          description: Unknown scenario
+          schema:
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            type: object
+      summary: Запустить demo-сценарий
+      tags:
+      - cluster
   /auth/forgot-password:
     post:
       consumes:

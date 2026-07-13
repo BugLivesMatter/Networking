@@ -97,6 +97,14 @@ func EnsureIndexes(ctx context.Context, db *mongo.Database) error {
 			},
 		},
 		// refresh_tokens
+		{collection: "incidents", model: mongo.IndexModel{Keys: bson.D{{Key: "status", Value: 1}, {Key: "updated_at", Value: -1}}}},
+		{collection: "incidents", model: mongo.IndexModel{Keys: bson.D{{Key: "severity", Value: 1}, {Key: "updated_at", Value: -1}}}},
+		{collection: "incidents", model: mongo.IndexModel{Keys: bson.D{{Key: "service", Value: 1}, {Key: "updated_at", Value: -1}}}},
+		{collection: "incidents", model: mongo.IndexModel{Keys: bson.D{{Key: "assignee_id", Value: 1}, {Key: "updated_at", Value: -1}}, Options: options.Index().SetSparse(true)}},
+		{collection: "incidents", model: mongo.IndexModel{Keys: bson.D{{Key: "updated_at", Value: -1}}}},
+		{collection: "incident_events", model: mongo.IndexModel{Keys: bson.D{{Key: "incident_id", Value: 1}, {Key: "created_at", Value: 1}}}},
+		{collection: "files", model: mongo.IndexModel{Keys: bson.D{{Key: "incident_id", Value: 1}, {Key: "scope", Value: 1}}, Options: options.Index().SetSparse(true)}},
+		// refresh_tokens
 		{
 			collection: "refresh_tokens",
 			model: mongo.IndexModel{

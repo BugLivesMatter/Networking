@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/lab2/rest-api/internal/auth/domain"
 	"github.com/lab2/rest-api/internal/auth/repository"
 	"github.com/lab2/rest-api/internal/auth/service"
 	"github.com/lab2/rest-api/internal/cache"
@@ -18,7 +19,18 @@ import (
 //  1. Криптографическая валидация подписи и срока действия JWT.
 //  2. Проверка по БД — хэш access token должен существовать в активной (не отозванной) сессии.
 //     Это гарантирует мгновенную инвалидацию токена после logout.
+//
+// AuthMiddleware keeps the original three-argument API for legacy callers.
+// New protected routes should use AuthMiddlewareWithUsers so RBAC is enforced.
 func AuthMiddleware(jwtService service.JWTService, tokenRepo repository.TokenRepository, cacheSvc cache.Service) gin.HandlerFunc {
+	return authMiddleware(jwtService, tokenRepo, nil, cacheSvc)
+}
+
+func AuthMiddlewareWithUsers(jwtService service.JWTService, tokenRepo repository.TokenRepository, userRepo repository.UserRepository, cacheSvc cache.Service) gin.HandlerFunc {
+	return authMiddleware(jwtService, tokenRepo, userRepo, cacheSvc)
+}
+
+func authMiddleware(jwtService service.JWTService, tokenRepo repository.TokenRepository, userRepo repository.UserRepository, cacheSvc cache.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 1. Извлекаем access token из HttpOnly cookie
 		tokenString, err := c.Cookie("access_token")
@@ -69,10 +81,48 @@ func AuthMiddleware(jwtService service.JWTService, tokenRepo repository.TokenRep
 			return
 		}
 
+		// Roles deliberately live in MongoDB, not in JWT. Fetching the current user
+		// here makes role changes effective on the next protected request.
+		var user *domain.User
+		role := domain.RoleViewer
+		if userRepo != nil {
+			user, err = userRepo.GetByID(c.Request.Context(), claims.UserID)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ошибка проверки пользователя"})
+				return
+			}
+			if user == nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "пользователь не найден"})
+				return
+			}
+			role = user.Role
+			if !role.Valid() {
+				role = domain.RoleViewer
+			}
+		}
+
 		// 4. Сохраняем userID в контекст для использования в хендлерах
 		c.Set("userID", claims.UserID.String())
 		c.Set("userEmail", claims.UserID.String())
+		c.Set("userRole", role)
+		if user != nil {
+			c.Set("currentUser", user)
+		}
 
+		c.Next()
+	}
+}
+
+// RequireRole authorizes a request after AuthMiddleware has loaded the role
+// from MongoDB. Role levels are cumulative.
+func RequireRole(required domain.Role) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		value, ok := c.Get("userRole")
+		role, valid := value.(domain.Role)
+		if !ok || !valid || !role.AtLeast(required) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "недостаточно прав"})
+			return
+		}
 		c.Next()
 	}
 }

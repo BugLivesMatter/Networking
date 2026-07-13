@@ -104,7 +104,7 @@ export const initialServices: ClusterService[] = [
   },
 ]
 
-const initialEvents: ClusterEvent[] = [
+export const initialEvents: ClusterEvent[] = [
   {
     id: 'boot-1',
     serviceId: 'api',

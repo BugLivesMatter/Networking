@@ -106,9 +106,28 @@ APP_PUBLIC_URL=http://localhost:4200
 # === App ===
 APP_ENV=development
 PORT=4200
+CLUSTER_SOURCE=demo
+CORS_ALLOWED_ORIGINS=http://localhost:3000,https://buglivesmatter.github.io
 ```
 
 > Не коммитьте `.env` с реальными секретами.
+
+### NeuroOps cluster dashboard API
+
+В режиме `CLUSTER_SOURCE=demo` доступны публичные endpoints для dashboard:
+
+- `GET /api/v1/cluster/topology` — текущий полный snapshot topology;
+- `GET /api/v1/cluster/services/:serviceID` — данные одного сервиса (`404`, если сервис не найден);
+- `GET /api/v1/cluster/events` — SSE-поток событий `cluster-event`;
+- `POST /api/v1/demo/scenarios/{latency|crash|scale|recover}` — безопасный demo-сценарий.
+
+`CORS_ALLOWED_ORIGINS` задаётся списком origin через запятую. По умолчанию разрешены локальный frontend и GitHub Pages dashboard.
+
+### NeuroOps incident workspace
+
+`VITE_NEUROOPS_MODE=demo` включает автономный GitHub Pages workspace: вход создаёт локальную admin-сессию, seed incidents/users и хранит изменения в `localStorage` (кнопка **Reset demo data** возвращает seed). `VITE_NEUROOPS_MODE=api` подключает REST/SSE API; пустой `VITE_CLUSTER_API_URL` означает same-origin.
+
+Защищённые endpoints MVP: `GET/POST /api/v1/incidents`, `GET/PATCH /api/v1/incidents/:id`, timeline/comments/attachments, `GET /api/v1/incidents/events`, `GET /api/v1/users` и admin-only `PATCH /api/v1/users/:id/role`. Первый зарегистрированный пользователь получает `admin`, следующие — `viewer`; роли проверяются по MongoDB на каждом запросе. Docker Compose собирает frontend в API-режиме и проксирует SSE без buffering.
 
 ---
 

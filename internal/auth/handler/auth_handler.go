@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/lab2/rest-api/internal/auth/domain"
 	"github.com/lab2/rest-api/internal/auth/dto"
 	"github.com/lab2/rest-api/internal/auth/service"
 )
@@ -186,6 +187,12 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 // @Failure 500 {object} AuthErrorResponse
 // @Router /auth/whoami [get]
 func (h *AuthHandler) WhoAmI(c *gin.Context) {
+	if current, ok := c.Get("currentUser"); ok {
+		if user, valid := current.(*domain.User); valid {
+			c.JSON(http.StatusOK, user.ToResponse())
+			return
+		}
+	}
 	// UserID добавляется в контекст middleware
 	userID, exists := c.Get("userID")
 	if !exists {

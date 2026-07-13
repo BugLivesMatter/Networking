@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/lab2/rest-api/internal/auth/service"
 	"github.com/lab2/rest-api/internal/auth/dto"
+	"github.com/lab2/rest-api/internal/auth/service"
 )
 
 // OAuthHandler обрабатывает OAuth запросы

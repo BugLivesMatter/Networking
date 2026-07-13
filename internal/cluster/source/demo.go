@@ -54,7 +54,10 @@ func (s *DemoSource) Subscribe(ctx context.Context) (<-chan domain.Event, error)
 	go func() {
 		<-ctx.Done()
 		s.mu.Lock()
-		delete(s.subscribers, updates)
+		if _, ok := s.subscribers[updates]; ok {
+			delete(s.subscribers, updates)
+			close(updates)
+		}
 		s.mu.Unlock()
 	}()
 

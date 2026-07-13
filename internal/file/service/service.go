@@ -133,4 +133,3 @@ func (s *fileService) Delete(ctx context.Context, fileID, userID uuid.UUID) erro
 	_ = s.storage.DeleteFile(ctx, file.ObjectKey)
 	return nil
 }
-

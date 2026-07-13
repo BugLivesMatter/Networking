@@ -5,4 +5,3 @@ package handler
 type AuthErrorResponse struct {
 	Error string `json:"error" example:"invalid_or_expired_token"`
 }
-

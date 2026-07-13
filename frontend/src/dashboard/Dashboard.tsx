@@ -5,8 +5,6 @@ import {
   ChevronRight,
   CircleDot,
   DatabaseZap,
-  GitFork,
-  LogIn,
   Maximize2,
   Network,
   Play,
@@ -17,8 +15,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { statusLabel } from './demoCluster'
-import type { DemoScenario, HealthStatus } from './types'
-import { useClusterSource } from './useClusterSource'
+import type { ClusterSnapshot, DemoScenario, HealthStatus } from './types'
 
 const statusClass: Record<HealthStatus, string> = {
   healthy: 'status-healthy',
@@ -43,8 +40,13 @@ const scenarioActions: Array<{
 const compactNumber = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 })
 const ClusterScene = lazy(() => import('./ClusterScene'))
 
-export default function Dashboard() {
-  const { snapshot, runScenario, sourceMode } = useClusterSource()
+interface DashboardProps {
+  snapshot: ClusterSnapshot
+  runScenario: (scenario: DemoScenario) => void
+  sourceMode: string
+}
+
+export default function Dashboard({ snapshot, runScenario, sourceMode }: DashboardProps) {
   const [selectedId, setSelectedId] = useState('api')
   const [scenario, setScenario] = useState<DemoScenario | null>(null)
   const selected = snapshot.services.find(service => service.id === selectedId) ?? snapshot.services[0]
@@ -67,29 +69,7 @@ export default function Dashboard() {
   }
 
   return (
-    <main className="dashboard-shell">
-      <div className="ambient ambient-one" />
-      <div className="ambient ambient-two" />
-      <div className="noise" />
-
-      <header className="topbar glass-panel">
-        <a href="./" className="brand" aria-label="NeuroOps home">
-          <span className="brand-mark"><Network size={17} /></span>
-          <span className="brand-word">NEURO<span>OPS</span></span>
-          <span className="preview-pill">PUBLIC PREVIEW</span>
-        </a>
-        <nav className="topnav" aria-label="Primary navigation">
-          <button className="active">Overview</button>
-          <button onClick={() => setSelectedId('api')}>Workloads</button>
-          <button>Events</button>
-          <button>Architecture</button>
-        </nav>
-        <div className="topbar-actions">
-          <a className="icon-button" href="https://github.com/BugLivesMatter/Networking" target="_blank" rel="noreferrer" aria-label="GitHub repository"><GitFork size={17} /></a>
-          <button className="login-button"><LogIn size={15} /> Sign in</button>
-        </div>
-      </header>
-
+    <>
       <aside className="left-rail">
         <section className="hero-copy">
           <div className="eyebrow"><span className="live-dot" /> LIVE DEMO CLUSTER <span className="eyebrow-divider" /> {sourceMode}</div>
@@ -194,6 +174,6 @@ export default function Dashboard() {
           </div>
         </section>
       </footer>
-    </main>
+    </>
   )
 }

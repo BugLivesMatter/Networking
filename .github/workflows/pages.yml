@@ -24,7 +24,8 @@ jobs:
       run:
         working-directory: frontend
     env:
-      VITE_CLUSTER_API_URL: ${{ vars.VITE_CLUSTER_API_URL }}
+      VITE_NEUROOPS_MODE: demo
+      VITE_CLUSTER_API_URL: ""
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6

@@ -20,11 +20,15 @@ type FileRepository interface {
 	SoftDelete(ctx context.Context, fileID, userID uuid.UUID) error
 }
 
+func (r *fileRepository) GetIncidentAttachment(ctx context.Context, fileID, incidentID uuid.UUID) (*domain.File, error) {
+	return r.findOne(ctx, bson.M{"_id": fileID, "scope": "incident", "incident_id": incidentID, "deleted_at": nil})
+}
+
 type fileRepository struct {
 	col *mongo.Collection
 }
 
-func NewFileRepository(col *mongo.Collection) FileRepository {
+func NewFileRepository(col *mongo.Collection) *fileRepository {
 	return &fileRepository{col: col}
 }
 
@@ -40,15 +44,15 @@ func (r *fileRepository) Create(ctx context.Context, file *domain.File) error {
 }
 
 func (r *fileRepository) GetByIDAndUserID(ctx context.Context, fileID, userID uuid.UUID) (*domain.File, error) {
-	return r.findOne(ctx, bson.M{"_id": fileID, "user_id": userID, "deleted_at": nil})
+	return r.findOne(ctx, legacyFileFilter(bson.M{"_id": fileID, "user_id": userID, "deleted_at": nil}))
 }
 
 func (r *fileRepository) GetByID(ctx context.Context, fileID uuid.UUID) (*domain.File, error) {
-	return r.findOne(ctx, bson.M{"_id": fileID, "deleted_at": nil})
+	return r.findOne(ctx, legacyFileFilter(bson.M{"_id": fileID, "deleted_at": nil}))
 }
 
 func (r *fileRepository) ListByUserID(ctx context.Context, userID uuid.UUID) ([]*domain.File, error) {
-	cursor, err := r.col.Find(ctx, bson.M{"user_id": userID, "deleted_at": nil})
+	cursor, err := r.col.Find(ctx, legacyFileFilter(bson.M{"user_id": userID, "deleted_at": nil}))
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +66,7 @@ func (r *fileRepository) ListByUserID(ctx context.Context, userID uuid.UUID) ([]
 
 func (r *fileRepository) SoftDelete(ctx context.Context, fileID, userID uuid.UUID) error {
 	now := time.Now()
-	filter := bson.M{"_id": fileID, "user_id": userID, "deleted_at": nil}
+	filter := legacyFileFilter(bson.M{"_id": fileID, "user_id": userID, "deleted_at": nil})
 	update := bson.M{"$set": bson.M{"deleted_at": now, "updated_at": now}}
 	result, err := r.col.UpdateOne(ctx, filter, update)
 	if err != nil {
@@ -72,6 +76,13 @@ func (r *fileRepository) SoftDelete(ctx context.Context, fileID, userID uuid.UUI
 		return errors.New("файл не найден или уже удалён")
 	}
 	return nil
+}
+
+// Incident attachments have a separate access path and must not accidentally
+// appear in the legacy avatar/files API.
+func legacyFileFilter(filter bson.M) bson.M {
+	filter["$or"] = bson.A{bson.M{"scope": bson.M{"$exists": false}}, bson.M{"scope": bson.M{"$ne": "incident"}}}
+	return filter
 }
 
 func (r *fileRepository) findOne(ctx context.Context, filter bson.M) (*domain.File, error) {

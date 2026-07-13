@@ -15,6 +15,40 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/cluster/topology": {
+            "get": {
+                "produces": ["application/json"],
+                "summary": "Получить topology кластера",
+                "tags": ["cluster"],
+                "responses": {"200": {"description": "Current cluster snapshot", "schema": {"$ref": "#/definitions/cluster.Snapshot"}}, "503": {"description": "Service Unavailable", "schema": {"type": "object"}}}
+            }
+        },
+        "/api/v1/cluster/services/{serviceID}": {
+            "get": {
+                "produces": ["application/json"],
+                "summary": "Получить сервис кластера",
+                "tags": ["cluster"],
+                "parameters": [{"description": "Идентификатор сервиса", "in": "path", "name": "serviceID", "required": true, "type": "string"}],
+                "responses": {"200": {"description": "Cluster service", "schema": {"$ref": "#/definitions/cluster.Service"}}, "404": {"description": "Service not found", "schema": {"type": "object"}}, "503": {"description": "Service Unavailable", "schema": {"type": "object"}}}
+            }
+        },
+        "/api/v1/cluster/events": {
+            "get": {
+                "produces": ["text/event-stream"],
+                "summary": "SSE-поток событий кластера",
+                "tags": ["cluster"],
+                "responses": {"200": {"description": "SSE cluster-event stream", "schema": {"type": "string"}}}
+            }
+        },
+        "/api/v1/demo/scenarios/{scenario}": {
+            "post": {
+                "produces": ["application/json"],
+                "summary": "Запустить demo-сценарий",
+                "tags": ["cluster"],
+                "parameters": [{"description": "Сценарий (latency, crash, scale, recover)", "in": "path", "name": "scenario", "required": true, "type": "string"}],
+                "responses": {"200": {"description": "Updated cluster snapshot", "schema": {"$ref": "#/definitions/cluster.Snapshot"}}, "400": {"description": "Unknown scenario", "schema": {"type": "object"}}, "503": {"description": "Service Unavailable", "schema": {"type": "object"}}}
+            }
+        },
         "/auth/forgot-password": {
             "post": {
                 "consumes": [
@@ -1852,6 +1886,26 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "cluster.Event": {
+            "type": "object",
+            "properties": {"detail": {"type": "string"}, "id": {"type": "string"}, "serviceId": {"type": "string"}, "status": {"type": "string"}, "timestamp": {"type": "string"}, "title": {"type": "string"}}
+        },
+        "cluster.Instance": {
+            "type": "object",
+            "properties": {"id": {"type": "string"}, "latency": {"type": "integer"}, "name": {"type": "string"}, "restarts": {"type": "integer"}, "startedAt": {"type": "string"}, "status": {"type": "string"}}
+        },
+        "cluster.Service": {
+            "type": "object",
+            "properties": {
+                "dependencies": {"type": "array", "items": {"type": "string"}}, "description": {"type": "string"}, "errorRate": {"type": "number"}, "id": {"type": "string"},
+                "instances": {"type": "array", "items": {"$ref": "#/definitions/cluster.Instance"}}, "kind": {"type": "string"}, "latency": {"type": "integer"}, "name": {"type": "string"},
+                "position": {"type": "array", "items": {"type": "number"}}, "requestsPerMinute": {"type": "integer"}, "status": {"type": "string"}, "uptime": {"type": "number"}, "version": {"type": "string"}
+            }
+        },
+        "cluster.Snapshot": {
+            "type": "object",
+            "properties": {"events": {"type": "array", "items": {"$ref": "#/definitions/cluster.Event"}}, "generatedAt": {"type": "string"}, "services": {"type": "array", "items": {"$ref": "#/definitions/cluster.Service"}}}
+        },
         "apperror.ErrorResponse": {
             "type": "object",
             "properties": {

@@ -88,6 +88,36 @@ func TestDemoSourceRejectsUnknownScenario(t *testing.T) {
 	}
 }
 
+func TestDemoSourceSnapshotIsIndependentCopy(t *testing.T) {
+	source := NewDemoSource(time.Second)
+	snapshot, err := source.Snapshot(context.Background())
+	if err != nil {
+		t.Fatalf("Snapshot() error = %v", err)
+	}
+	snapshot.Services[0].Name = "mutated"
+	snapshot.Services[0].Instances[0].Name = "mutated"
+	snapshot.Services[0].Dependencies = append(snapshot.Services[0].Dependencies, "mutated")
+	snapshot.Events[0].Title = "mutated"
+
+	fresh, err := source.Snapshot(context.Background())
+	if err != nil {
+		t.Fatalf("Snapshot() error = %v", err)
+	}
+	if fresh.Services[0].Name == "mutated" || fresh.Services[0].Instances[0].Name == "mutated" || fresh.Events[0].Title == "mutated" {
+		t.Fatal("Snapshot() returned mutable internal state")
+	}
+}
+
+func TestFactorySupportsDemoAndRejectsUnknownSource(t *testing.T) {
+	cluster, scenarios, err := NewFactory("demo", time.Second)
+	if err != nil || cluster == nil || scenarios == nil {
+		t.Fatalf("NewFactory(demo) = (%v, %v, %v)", cluster, scenarios, err)
+	}
+	if _, _, err := NewFactory("kubernetes", time.Second); err == nil {
+		t.Fatal("NewFactory(kubernetes) error = nil")
+	}
+}
+
 func serviceByID(t *testing.T, snapshot domain.Snapshot, id string) domain.Service {
 	t.Helper()
 	for _, service := range snapshot.Services {

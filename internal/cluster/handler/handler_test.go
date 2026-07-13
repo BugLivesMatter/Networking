@@ -62,6 +62,40 @@ func TestRunUnknownScenario(t *testing.T) {
 	}
 }
 
+func TestServiceDetail(t *testing.T) {
+	router := testRouter()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/cluster/services/redis", nil)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %s", response.Code, response.Body.String())
+	}
+	var service domain.Service
+	if err := json.Unmarshal(response.Body.Bytes(), &service); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if service.ID != "redis" {
+		t.Errorf("service id = %q, want redis", service.ID)
+	}
+}
+
+func TestServiceNotFound(t *testing.T) {
+	router := testRouter()
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/cluster/services/missing", nil)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", response.Code)
+	}
+	if response.Body.String() != `{"error":"service not found"}` {
+		t.Errorf("body = %q, want service-not-found response", response.Body.String())
+	}
+}
+
 func testRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	demo := source.NewDemoSource(time.Second)

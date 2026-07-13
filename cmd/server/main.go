@@ -10,10 +10,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -33,6 +37,10 @@ import (
 	filerepo "github.com/lab2/rest-api/internal/file/repository"
 	fileservice "github.com/lab2/rest-api/internal/file/service"
 	"github.com/lab2/rest-api/internal/health"
+	incidenthandler "github.com/lab2/rest-api/internal/incident/handler"
+	"github.com/lab2/rest-api/internal/incident/hub"
+	incidentrepo "github.com/lab2/rest-api/internal/incident/repository"
+	incidentservice "github.com/lab2/rest-api/internal/incident/service"
 	"github.com/lab2/rest-api/internal/middleware"
 	producthandler "github.com/lab2/rest-api/internal/product/handler"
 	productrepo "github.com/lab2/rest-api/internal/product/repository"
@@ -61,6 +69,8 @@ func main() {
 
 	// ========== MONGODB ==========
 	ctx := context.Background()
+	appCtx, appCancel := context.WithCancel(ctx)
+	defer appCancel()
 	mongoClient, err := database.Connect(ctx, cfg.MongoURI)
 	if err != nil {
 		log.Fatalf("connect mongodb: %v", err)
@@ -81,6 +91,8 @@ func main() {
 	colCategories := mongoDB.Collection("categories")
 	colProducts := mongoDB.Collection("products")
 	colFiles := mongoDB.Collection("files")
+	colIncidents := mongoDB.Collection("incidents")
+	colIncidentEvents := mongoDB.Collection("incident_events")
 
 	// ========== REDIS / CACHE ==========
 	cacheClient, cacheErr := cache.NewRedisClient(ctx, cfg.RedisHost, cfg.RedisPort, cfg.RedisPassword)
@@ -112,7 +124,7 @@ func main() {
 	}
 	instanceID := fmt.Sprintf("%s:%s", getHostname(), uuid.New().String())
 	distLock := cache.NewDistributedLock(cacheClient)
-	go messaging.RunUserRegisteredConsumer(context.Background(), rmqConsCh, cfg.QueueRegistered, cacheService, distLock, instanceID, mailSender, eventPublisher)
+	go messaging.RunUserRegisteredConsumer(appCtx, rmqConsCh, cfg.QueueRegistered, cacheService, distLock, instanceID, mailSender, eventPublisher)
 
 	storageService, err := storage.NewMinIOService(cfg)
 	if err != nil {
@@ -169,7 +181,7 @@ func main() {
 	)
 	oauthHandler := authhandler.NewOAuthHandler(oauthService)
 
-	authMW := authmiddleware.AuthMiddleware(jwtService, tokenRepo, cacheService)
+	authMW := authmiddleware.AuthMiddlewareWithUsers(jwtService, tokenRepo, userRepo, cacheService)
 
 	// ========== КАТЕГОРИИ И ПРОДУКТЫ ==========
 	categoryRepo := categoryrepo.NewCategoryRepository(colCategories)
@@ -180,13 +192,21 @@ func main() {
 	categoryHandler := categoryhandler.NewCategoryHandler(categorySvc)
 	productHandler := producthandler.NewProductHandler(productSvc)
 	fileHandler := filehandler.NewHandler(fileSvc, storageService)
+	cluster, scenarios, err := clustersource.NewFactory(cfg.ClusterSource, 3800*time.Millisecond)
+	if err != nil {
+		log.Fatalf("init cluster source: %v", err)
+	}
+	incidentHub := hub.New()
+	defer incidentHub.Close()
+	incidentRepo := incidentrepo.NewMongoRepository(colIncidents, colIncidentEvents)
+	incidentSvc := incidentservice.New(incidentRepo, cluster, incidentHub, fileRepo, storageService, cfg.MinIOBucket, cfg.MaxFileSize, userRepo)
+	incidentHandler := incidenthandler.New(incidentSvc, userRepo, storageService)
 
 	// ========== РОУТЕР ==========
 	r := gin.New()
 	r.MaxMultipartMemory = cfg.MaxFileSize
-	r.Use(gin.Recovery(), middleware.Recovery())
-	demoCluster := clustersource.NewDemoSource(3800 * time.Millisecond)
-	clusterhandler.New(demoCluster, demoCluster).RegisterRoutes(r)
+	r.Use(gin.Recovery(), middleware.Recovery(), middleware.CORS(cfg.CORSAllowedOrigins))
+	clusterhandler.New(cluster, scenarios).RegisterRoutes(r)
 	if cfg.AppEnv != "production" {
 		swaggerHandler := ginSwagger.WrapHandler(
 			swaggerfiles.Handler,
@@ -248,6 +268,10 @@ func main() {
 		protectedAuth.POST("/logout-all", authHandler.LogoutAll)
 	}
 
+	incidentAPI := r.Group("")
+	incidentAPI.Use(authMW)
+	incidentHandler.RegisterRoutes(incidentAPI)
+
 	categories := r.Group("/categories")
 	categories.Use(authMW)
 	{
@@ -288,8 +312,34 @@ func main() {
 
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	log.Printf("server listening on %s (instanceID=%s)", addr, instanceID)
-	if err := http.ListenAndServe(addr, r); err != nil {
-		log.Fatalf("serve: %v", err)
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		BaseContext: func(net.Listener) context.Context {
+			return appCtx
+		},
+		// Do not set WriteTimeout: SSE connections are intentionally long-lived.
+	}
+	serverErr := make(chan error, 1)
+	go func() { serverErr <- server.ListenAndServe() }()
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(signals)
+	select {
+	case serveErr := <-serverErr:
+		if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			log.Fatalf("serve: %v", serveErr)
+		}
+	case sig := <-signals:
+		log.Printf("received %s, shutting down", sig)
+		appCancel()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Printf("graceful shutdown: %v", err)
+		}
+		cancel()
 	}
 }
 

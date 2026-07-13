@@ -12,10 +12,12 @@ import (
 )
 
 type Config struct {
-	MongoURI    string
-	MongoDBName string
-	Port        int
-	AppEnv      string
+	MongoURI           string
+	MongoDBName        string
+	Port               int
+	AppEnv             string
+	ClusterSource      string
+	CORSAllowedOrigins []string
 
 	// JWT конфигурация
 	JWTAccessSecret      string
@@ -79,12 +81,19 @@ func Load() (*Config, error) {
 	if smtpAuth == "" {
 		smtpAuth = "plain"
 	}
+	clusterSource := strings.ToLower(strings.TrimSpace(getEnv("CLUSTER_SOURCE", "demo")))
+	if clusterSource == "" {
+		clusterSource = "demo"
+	}
+	allowedOrigins := parseCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,https://buglivesmatter.github.io"))
 
 	cfg := &Config{
-		MongoURI:    getEnv("MONGO_URI", "mongodb://localhost:27017"),
-		MongoDBName: getEnv("MONGO_DB_NAME", "wp_labs"),
-		Port:        port,
-		AppEnv:      getEnv("APP_ENV", "development"),
+		MongoURI:           getEnv("MONGO_URI", "mongodb://localhost:27017"),
+		MongoDBName:        getEnv("MONGO_DB_NAME", "wp_labs"),
+		Port:               port,
+		AppEnv:             getEnv("APP_ENV", "development"),
+		ClusterSource:      clusterSource,
+		CORSAllowedOrigins: allowedOrigins,
 
 		// JWT
 		JWTAccessSecret:      getEnv("JWT_ACCESS_SECRET", ""),
@@ -127,10 +136,38 @@ func Load() (*Config, error) {
 		SMTPAuth:     smtpAuth,
 		AppPublicURL: strings.TrimRight(getEnv("APP_PUBLIC_URL", "http://localhost:4200"), "/"),
 	}
+	if err := cfg.validateCluster(); err != nil {
+		return nil, err
+	}
 	if err := cfg.validateMessaging(); err != nil {
 		return nil, err
 	}
 	return cfg, nil
+}
+
+func parseCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" || part == "*" {
+			continue
+		}
+		if _, ok := seen[part]; ok {
+			continue
+		}
+		seen[part] = struct{}{}
+		result = append(result, part)
+	}
+	return result
+}
+
+func (c *Config) validateCluster() error {
+	if c.ClusterSource != "demo" {
+		return fmt.Errorf("конфигурация: неизвестный CLUSTER_SOURCE %q (допустимо: demo)", c.ClusterSource)
+	}
+	return nil
 }
 
 // validateMessaging проверяет обязательные параметры RabbitMQ и SMTP (ЛР8).

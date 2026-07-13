@@ -279,6 +279,9 @@ func (s *authServiceImpl) GetUserByID(ctx context.Context, userID uuid.UUID) (*d
 	cacheKey := cache.UserProfileKey(userID)
 	hit, err := s.cacheSvc.Get(ctx, cacheKey, &cached)
 	if err == nil && hit {
+		if !cached.Role.Valid() {
+			cached.Role = domain.RoleViewer
+		}
 		return &cached, nil
 	}
 

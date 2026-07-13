@@ -54,4 +54,3 @@ type ErrorResponse struct {
 // Duration примечание: swagger плохо показывает time.Duration как пример,
 // поэтому в ответах храним сроки как string.
 var _ time.Duration
-
