@@ -73,16 +73,16 @@ export default function Dashboard() {
       <div className="noise" />
 
       <header className="topbar glass-panel">
-        <a href="#" className="brand" aria-label="NeuroOps home">
+        <a href="./" className="brand" aria-label="NeuroOps home">
           <span className="brand-mark"><Network size={17} /></span>
           <span className="brand-word">NEURO<span>OPS</span></span>
           <span className="preview-pill">PUBLIC PREVIEW</span>
         </a>
         <nav className="topnav" aria-label="Primary navigation">
-          <a href="#overview" className="active">Overview</a>
-          <a href="#services">Services</a>
-          <a href="#events">Events</a>
-          <a href="#about">Architecture</a>
+          <button className="active">Overview</button>
+          <button onClick={() => setSelectedId('api')}>Workloads</button>
+          <button>Events</button>
+          <button>Architecture</button>
         </nav>
         <div className="topbar-actions">
           <a className="icon-button" href="https://github.com/BugLivesMatter/Networking" target="_blank" rel="noreferrer" aria-label="GitHub repository"><GitFork size={17} /></a>
@@ -90,11 +90,25 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <section className="hero-copy" id="overview">
-        <div className="eyebrow"><span className="live-dot" /> LIVE DEMO CLUSTER <span className="eyebrow-divider" /> {sourceMode}</div>
-        <h1>Your infrastructure,<br /><em>alive.</em></h1>
-        <p>A living topology of services, pods and dependencies.<br />Rotate the cluster. Break it. Watch it recover.</p>
-      </section>
+      <aside className="left-rail">
+        <section className="hero-copy">
+          <div className="eyebrow"><span className="live-dot" /> LIVE DEMO CLUSTER <span className="eyebrow-divider" /> {sourceMode}</div>
+          <h1>Your infrastructure,<br /><em>alive.</em></h1>
+          <p>A five-dimensional projection of workloads, replicas and dependencies.<br />Rotate the cluster. Break it. Watch it recover.</p>
+        </section>
+
+        <section className="summary-panel glass-panel">
+          <div className="panel-kicker"><Activity size={14} /> Cluster pulse</div>
+          <div className="pulse-state"><span className={totals.incidents ? 'pulse-orb pulse-orb--alert' : 'pulse-orb'} />{totals.incidents ? 'Action required' : 'All systems nominal'}</div>
+          <div className="metric-grid">
+            <div><strong>{totals.services}<small>/{totals.totalServices}</small></strong><span>Services</span></div>
+            <div><strong>{totals.pods}</strong><span>Replicas</span></div>
+            <div><strong>{totals.latency}<small>ms</small></strong><span>Avg latency</span></div>
+            <div><strong>{totals.incidents}</strong><span>Failures</span></div>
+          </div>
+          <div className="last-sync"><span>Last topology sync</span><time>{snapshot.generatedAt.toLocaleTimeString('en-GB')}</time></div>
+        </section>
+      </aside>
 
       <section className="scene-wrap" aria-label="Interactive cluster topology">
         <Suspense fallback={<div className="scene-loader"><Network size={20} /><span>Initializing topology</span></div>}>
@@ -103,91 +117,83 @@ export default function Dashboard() {
         <div className="scene-hint"><CircleDot size={13} /> Drag to orbit · Scroll to zoom · Select a node</div>
       </section>
 
-      <aside className="summary-panel glass-panel">
-        <div className="panel-kicker"><Activity size={14} /> Cluster pulse</div>
-        <div className="pulse-state"><span className={totals.incidents ? 'pulse-orb pulse-orb--alert' : 'pulse-orb'} />{totals.incidents ? 'Action required' : 'All systems nominal'}</div>
-        <div className="metric-grid">
-          <div><strong>{totals.services}<small>/{totals.totalServices}</small></strong><span>Services</span></div>
-          <div><strong>{totals.pods}</strong><span>Instances</span></div>
-          <div><strong>{totals.latency}<small>ms</small></strong><span>Avg latency</span></div>
-          <div><strong>{totals.incidents}</strong><span>Failures</span></div>
-        </div>
-        <div className="last-sync"><span>Last topology sync</span><time>{snapshot.generatedAt.toLocaleTimeString('en-GB')}</time></div>
-      </aside>
-
-      <aside className="details-panel glass-panel">
-        <div className="details-title-row">
-          <div className={`service-glyph ${statusClass[selected.status]}`}><Box size={17} /></div>
-          <div><span>Selected service</span><h2>{selected.name}</h2></div>
-          <span className={`status-badge ${statusClass[selected.status]}`}><i />{statusLabel[selected.status]}</span>
-        </div>
-        <p className="service-description">{selected.description}</p>
-        <div className="details-metrics">
-          <div><span>Latency p95</span><strong>{selected.latency} ms</strong></div>
-          <div><span>Uptime 30d</span><strong>{selected.uptime}%</strong></div>
-          <div><span>Requests/min</span><strong>{compactNumber.format(selected.requestsPerMinute)}</strong></div>
-          <div><span>Error rate</span><strong>{selected.errorRate}%</strong></div>
-        </div>
-        <div className="instances-head"><span>Instances</span><small>{selected.version}</small></div>
-        <div className="instance-list">
-          {selected.instances.map(instance => (
-            <button key={instance.id} className="instance-row">
-              <i className={statusClass[instance.status]} />
-              <span>{instance.name}</span>
-              <small>{instance.status === 'starting' ? 'pending' : instance.status === 'unhealthy' ? 'timeout' : `${instance.latency} ms`}</small>
-              <ChevronRight size={13} />
-            </button>
-          ))}
-        </div>
-      </aside>
-
-      <section className="demo-controls glass-panel">
-        <div className="controls-heading">
-          <span><Play size={13} /> CHAOS LAB</span>
-          <small>Safe simulated actions</small>
-        </div>
-        <div className="scenario-grid">
-          {scenarioActions.map(action => {
-            const Icon = action.icon
-            return (
-              <button
-                key={action.id}
-                className={scenario === action.id ? 'scenario-button is-running' : 'scenario-button'}
-                onClick={() => executeScenario(action.id)}
-              >
-                <Icon size={15} />
-                <span>{action.label}<small>{action.hint}</small></span>
+      <aside className="right-rail">
+        <section className="details-panel glass-panel">
+          <div className="details-title-row">
+            <div className={`service-glyph ${statusClass[selected.status]}`}><Box size={17} /></div>
+            <div><span>Selected workload</span><h2>{selected.name}</h2></div>
+            <span className={`status-badge ${statusClass[selected.status]}`}><i />{statusLabel[selected.status]}</span>
+          </div>
+          <p className="service-description">{selected.description}</p>
+          <div className="details-metrics">
+            <div><span>Latency p95</span><strong>{selected.latency} ms</strong></div>
+            <div><span>Uptime 30d</span><strong>{selected.uptime}%</strong></div>
+            <div><span>Requests/min</span><strong>{compactNumber.format(selected.requestsPerMinute)}</strong></div>
+            <div><span>Error rate</span><strong>{selected.errorRate}%</strong></div>
+          </div>
+          <div className="instances-head"><span>Replicas</span><small>{selected.version}</small></div>
+          <div className="instance-list">
+            {selected.instances.map(instance => (
+              <button key={instance.id} className="instance-row">
+                <i className={statusClass[instance.status]} />
+                <span>{instance.name}</span>
+                <small>{instance.status === 'starting' ? 'pending' : instance.status === 'unhealthy' ? 'timeout' : `${instance.latency} ms`}</small>
+                <ChevronRight size={13} />
               </button>
-            )
-          })}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
 
-      <section className="services-strip glass-panel" id="services">
-        <div className="strip-header">
-          <span><DatabaseZap size={14} /> SERVICE HEALTH</span>
-          <small>Click any row to focus the node</small>
-        </div>
-        <div className="services-row">
-          {snapshot.services.map(service => (
-            <button
-              key={service.id}
-              className={service.id === selected.id ? 'service-chip is-selected' : 'service-chip'}
-              onClick={() => setSelectedId(service.id)}
-            >
-              <i className={statusClass[service.status]} />
-              <span>{service.name}<small>{service.instances.length} pods · {service.latency} ms</small></span>
-              <Activity size={14} />
-            </button>
-          ))}
-        </div>
-      </section>
+        <section className="event-toast glass-panel">
+          <Sparkles size={14} />
+          <div><strong>{snapshot.events[0].title}</strong><span>{snapshot.events[0].detail}</span></div>
+          <time>{snapshot.events[0].timestamp.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time>
+        </section>
+      </aside>
 
-      <section className="event-toast glass-panel" id="events">
-        <Sparkles size={14} />
-        <div><strong>{snapshot.events[0].title}</strong><span>{snapshot.events[0].detail}</span></div>
-        <time>{snapshot.events[0].timestamp.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time>
-      </section>
+      <footer className="bottom-dock">
+        <section className="demo-controls glass-panel">
+          <div className="controls-heading">
+            <span><Play size={13} /> CHAOS LAB</span>
+            <small>Safe simulated actions</small>
+          </div>
+          <div className="scenario-grid">
+            {scenarioActions.map(action => {
+              const Icon = action.icon
+              return (
+                <button
+                  key={action.id}
+                  className={scenario === action.id ? 'scenario-button is-running' : 'scenario-button'}
+                  onClick={() => executeScenario(action.id)}
+                >
+                  <Icon size={15} />
+                  <span>{action.label}<small>{action.hint}</small></span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+
+        <section className="services-strip glass-panel">
+          <div className="strip-header">
+            <span><DatabaseZap size={14} /> WORKLOAD HEALTH</span>
+            <small>Select a cell to focus</small>
+          </div>
+          <div className="services-row">
+            {snapshot.services.map(service => (
+              <button
+                key={service.id}
+                className={service.id === selected.id ? 'service-chip is-selected' : 'service-chip'}
+                onClick={() => setSelectedId(service.id)}
+              >
+                <i className={statusClass[service.status]} />
+                <span>{service.name}<small>{service.instances.length} replicas · {service.latency} ms</small></span>
+                <Activity size={14} />
+              </button>
+            ))}
+          </div>
+        </section>
+      </footer>
     </main>
   )
 }

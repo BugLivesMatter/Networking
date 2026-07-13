@@ -3,6 +3,8 @@
 ## Статус разработки
 
 - [x] Интерактивная 3D-сцена и liquid-glass dashboard.
+- [x] Проекция 5D-гиперкуба с workload-ячейками и близкими репликами.
+- [x] WebGL compatibility view для устройств без аппаратного 3D.
 - [x] Браузерный demo cluster с четырьмя chaos-сценариями.
 - [x] Go-контракт `ClusterSource`, REST snapshot, SSE и scenario API.
 - [x] Переключение frontend между local simulation и Go API.

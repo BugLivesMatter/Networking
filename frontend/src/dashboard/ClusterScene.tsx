@@ -1,8 +1,12 @@
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Environment, Html, Line, OrbitControls, Sparkles } from '@react-three/drei'
-import { useMemo, useRef } from 'react'
+import { Html, Line, OrbitControls, Sparkles } from '@react-three/drei'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Group, Mesh } from 'three'
-import { AdditiveBlending, Color } from 'three'
+import {
+  AdditiveBlending,
+  BufferGeometry,
+  Float32BufferAttribute,
+} from 'three'
 import { statusColor } from './demoCluster'
 import type { ClusterService, HealthStatus } from './types'
 
@@ -12,6 +16,62 @@ interface ClusterSceneProps {
   onSelect: (serviceId: string) => void
 }
 
+type Vec3 = [number, number, number]
+
+const replicaOffsets: Vec3[] = [
+  [-0.18, 0.08, 0.05],
+  [0.18, -0.08, -0.05],
+  [0.02, 0.2, -0.14],
+  [-0.04, -0.22, 0.14],
+  [0.24, 0.16, 0.13],
+]
+
+function projectHypercubeVertex(index: number): Vec3 {
+  const axis = Array.from({ length: 5 }, (_, bit) => ((index >> bit) & 1) === 1 ? 1 : -1)
+  const [x, y, z, w, v] = axis
+  return [
+    (x * 2.1 + w * 0.62 + v * 0.3) * 0.92,
+    (y * 1.82 + w * 0.42 - v * 0.46) * 0.9,
+    (z * 1.88 - w * 0.52 + v * 0.68) * 0.82,
+  ]
+}
+
+function HypercubeFrame() {
+  const { edgeGeometry, vertexGeometry } = useMemo(() => {
+    const vertices = Array.from({ length: 32 }, (_, index) => projectHypercubeVertex(index))
+    const edgePositions: number[] = []
+
+    for (let vertex = 0; vertex < vertices.length; vertex++) {
+      for (let dimension = 0; dimension < 5; dimension++) {
+        const neighbour = vertex ^ (1 << dimension)
+        if (vertex >= neighbour) continue
+        edgePositions.push(...vertices[vertex], ...vertices[neighbour])
+      }
+    }
+
+    return {
+      edgeGeometry: new BufferGeometry().setAttribute('position', new Float32BufferAttribute(edgePositions, 3)),
+      vertexGeometry: new BufferGeometry().setAttribute('position', new Float32BufferAttribute(vertices.flat(), 3)),
+    }
+  }, [])
+
+  useEffect(() => () => {
+    edgeGeometry.dispose()
+    vertexGeometry.dispose()
+  }, [edgeGeometry, vertexGeometry])
+
+  return (
+    <group rotation={[0.04, -0.08, 0.02]}>
+      <lineSegments geometry={edgeGeometry}>
+        <lineBasicMaterial color="#8fa3c2" transparent opacity={0.2} depthWrite={false} />
+      </lineSegments>
+      <points geometry={vertexGeometry}>
+        <pointsMaterial color="#c7d6ed" size={0.045} transparent opacity={0.46} sizeAttenuation />
+      </points>
+    </group>
+  )
+}
+
 const connectionStatus = (source: ClusterService, target: ClusterService): HealthStatus => {
   if (source.status === 'unhealthy' || target.status === 'unhealthy') return 'unhealthy'
   if (source.status === 'degraded' || target.status === 'degraded') return 'degraded'
@@ -19,14 +79,9 @@ const connectionStatus = (source: ClusterService, target: ClusterService): Healt
   return 'healthy'
 }
 
-function Signal({
-  start,
-  end,
-  status,
-  offset,
-}: {
-  start: [number, number, number]
-  end: [number, number, number]
+function Signal({ start, end, status, offset }: {
+  start: Vec3
+  end: Vec3
   status: HealthStatus
   offset: number
 }) {
@@ -34,63 +89,60 @@ function Signal({
 
   useFrame(({ clock }) => {
     if (!ref.current) return
-    const progress = (clock.elapsedTime * 0.22 + offset) % 1
+    const progress = (clock.elapsedTime * 0.18 + offset) % 1
+    const bend = Math.sin(progress * Math.PI) * 0.16
     ref.current.position.set(
       start[0] + (end[0] - start[0]) * progress,
-      start[1] + (end[1] - start[1]) * progress + Math.sin(progress * Math.PI) * 0.22,
-      start[2] + (end[2] - start[2]) * progress,
+      start[1] + (end[1] - start[1]) * progress + bend,
+      start[2] + (end[2] - start[2]) * progress - bend * 0.45,
     )
   })
 
   return (
     <mesh ref={ref}>
-      <sphereGeometry args={[0.035, 10, 10]} />
+      <octahedronGeometry args={[0.04, 0]} />
       <meshBasicMaterial color={statusColor[status]} blending={AdditiveBlending} transparent opacity={0.9} />
     </mesh>
   )
 }
 
-function Connection({ source, target }: { source: ClusterService; target: ClusterService }) {
+function Synapse({ source, target }: { source: ClusterService; target: ClusterService }) {
   const status = connectionStatus(source, target)
-  const midpoint: [number, number, number] = [
+  const midpoint: Vec3 = [
     (source.position[0] + target.position[0]) / 2,
-    (source.position[1] + target.position[1]) / 2 + 0.22,
-    (source.position[2] + target.position[2]) / 2,
+    (source.position[1] + target.position[1]) / 2 + 0.18,
+    (source.position[2] + target.position[2]) / 2 - 0.12,
   ]
-  const points = [source.position, midpoint, target.position]
 
   return (
     <group>
       <Line
-        points={points}
+        points={[source.position, midpoint, target.position]}
         color={statusColor[status]}
-        lineWidth={status === 'healthy' ? 0.45 : 1.15}
+        lineWidth={status === 'healthy' ? 0.55 : 1.3}
         transparent
-        opacity={status === 'healthy' ? 0.2 : 0.65}
+        opacity={status === 'healthy' ? 0.28 : 0.72}
       />
-      <Signal start={source.position} end={target.position} status={status} offset={source.position[0] * 0.13 + 0.6} />
+      <Signal start={source.position} end={target.position} status={status} offset={(source.position[0] + 4) * 0.11} />
+      <Signal start={source.position} end={target.position} status={status} offset={(source.position[2] + 5) * 0.17} />
     </group>
   )
 }
 
-function ServiceNode({
-  service,
-  selected,
-  onSelect,
-}: {
+function WorkloadCell({ service, selected, onSelect }: {
   service: ClusterService
   selected: boolean
   onSelect: () => void
 }) {
   const group = useRef<Group>(null)
-  const core = useRef<Mesh>(null)
+  const anchor = useRef<Mesh>(null)
   const color = statusColor[service.status]
 
   useFrame(({ clock }, delta) => {
-    if (group.current) group.current.rotation.y += delta * (selected ? 0.34 : 0.13)
-    if (core.current) {
-      const pulse = 1 + Math.sin(clock.elapsedTime * 2.2 + service.position[0]) * 0.035
-      core.current.scale.setScalar(pulse)
+    if (group.current) group.current.rotation.y += delta * (selected ? 0.12 : 0.035)
+    if (anchor.current) {
+      const pulse = 1 + Math.sin(clock.elapsedTime * 2 + service.position[0]) * 0.08
+      anchor.current.scale.setScalar(pulse)
     }
   })
 
@@ -105,54 +157,54 @@ function ServiceNode({
         onPointerOver={() => { document.body.style.cursor = 'pointer' }}
         onPointerOut={() => { document.body.style.cursor = 'default' }}
       >
-        <mesh ref={core}>
-          <icosahedronGeometry args={[selected ? 0.42 : 0.36, 4]} />
-          <meshPhysicalMaterial
-            color={new Color(color)}
-            emissive={new Color(color)}
-            emissiveIntensity={service.status === 'healthy' ? 0.25 : 1.15}
-            roughness={0.16}
-            metalness={0.15}
-            transmission={0.35}
-            transparent
-            opacity={0.9}
-          />
+        <mesh>
+          <boxGeometry args={[selected ? 0.92 : 0.78, selected ? 0.72 : 0.62, selected ? 0.82 : 0.7]} />
+          <meshBasicMaterial color={color} wireframe transparent opacity={selected ? 0.3 : 0.105} />
         </mesh>
 
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[selected ? 0.69 : 0.58, 0.012, 8, 80]} />
-          <meshBasicMaterial color={color} transparent opacity={selected ? 0.75 : 0.22} />
-        </mesh>
-
-        <mesh rotation={[0.4, 0.7, 0]}>
-          <torusGeometry args={[selected ? 0.81 : 0.69, 0.006, 8, 80]} />
-          <meshBasicMaterial color={color} transparent opacity={selected ? 0.38 : 0.12} />
+        <mesh ref={anchor}>
+          <octahedronGeometry args={[selected ? 0.105 : 0.085, 0]} />
+          <meshBasicMaterial color={color} transparent opacity={0.6} />
         </mesh>
 
         {service.instances.map((instance, index) => {
-          const angle = (index / service.instances.length) * Math.PI * 2 + 0.3
-          const radius = 0.7 + (index % 2) * 0.12
+          const offset = replicaOffsets[index % replicaOffsets.length]
           const instanceColor = statusColor[instance.status]
           return (
-            <group key={instance.id} position={[Math.cos(angle) * radius, Math.sin(angle) * radius, Math.sin(angle * 1.8) * 0.22]}>
+            <group key={instance.id} position={offset}>
               <mesh>
-                <sphereGeometry args={[0.11, 18, 18]} />
+                <icosahedronGeometry args={[selected ? 0.16 : 0.135, 2]} />
                 <meshStandardMaterial
                   color={instanceColor}
                   emissive={instanceColor}
-                  emissiveIntensity={instance.status === 'healthy' ? 0.4 : 1.6}
+                  emissiveIntensity={instance.status === 'healthy' ? 0.55 : 1.8}
+                  roughness={0.32}
+                  metalness={0.08}
                 />
               </mesh>
-              <Line points={[[0, 0, 0], [-Math.cos(angle) * radius * 0.58, -Math.sin(angle) * radius * 0.58, 0]]} color={instanceColor} lineWidth={0.35} transparent opacity={0.28} />
+              <Line
+                points={[[0, 0, 0], [-offset[0], -offset[1], -offset[2]]]}
+                color={instanceColor}
+                lineWidth={0.55}
+                transparent
+                opacity={0.38}
+              />
             </group>
           )
         })}
+
+        {replicaOffsets.slice(service.instances.length, service.instances.length + 3).map((offset, index) => (
+          <mesh key={`probe-${index}`} position={[offset[0] * 1.18, offset[1] * 1.18, offset[2] * 1.18]}>
+            <sphereGeometry args={[0.025, 8, 8]} />
+            <meshBasicMaterial color={color} transparent opacity={0.24} />
+          </mesh>
+        ))}
       </group>
 
-      <Html center position={[0, -1.05, 0]} distanceFactor={9} style={{ pointerEvents: 'none' }}>
+      <Html center position={[0, -0.62, 0]} distanceFactor={8.5} style={{ pointerEvents: 'none' }}>
         <div className={`node-label ${selected ? 'node-label--selected' : ''}`}>
           <span>{service.name}</span>
-          <small>{service.instances.length} {service.instances.length === 1 ? 'instance' : 'instances'}</small>
+          <small>{service.instances.length} {service.instances.length === 1 ? 'replica' : 'replicas'}</small>
         </div>
       </Html>
     </group>
@@ -160,49 +212,105 @@ function ServiceNode({
 }
 
 function SceneContent({ services, selectedId, onSelect }: ClusterSceneProps) {
+  const root = useRef<Group>(null)
   const connections = useMemo(() => services.flatMap(source => source.dependencies.flatMap(targetId => {
     const target = services.find(service => service.id === targetId)
     return target ? [{ source, target }] : []
   })), [services])
 
+  useFrame(({ clock }) => {
+    if (!root.current) return
+    root.current.position.y = Math.sin(clock.elapsedTime * 0.24) * 0.035
+  })
+
   return (
     <>
-      <ambientLight intensity={0.45} />
-      <pointLight position={[-5, 5, 6]} intensity={26} color="#c7dcff" distance={22} />
-      <pointLight position={[5, -4, 3]} intensity={18} color="#ffffff" distance={18} />
-      <Sparkles count={85} scale={[13, 8, 6]} size={1.25} speed={0.12} opacity={0.18} color="#a1a1aa" />
-      {connections.map(({ source, target }) => (
-        <Connection key={`${source.id}-${target.id}`} source={source} target={target} />
-      ))}
-      {services.map(service => (
-        <ServiceNode
-          key={service.id}
-          service={service}
-          selected={service.id === selectedId}
-          onSelect={() => onSelect(service.id)}
-        />
-      ))}
-      <Environment preset="city" environmentIntensity={0.2} />
+      <color attach="background" args={["#050506"]} />
+      <fog attach="fog" args={["#050506", 9, 20]} />
+      <ambientLight intensity={0.72} />
+      <directionalLight position={[-4, 6, 7]} intensity={1.4} color="#dce9ff" />
+      <pointLight position={[4, -3, 4]} intensity={10} color="#6b87b5" distance={14} />
+      <Sparkles count={44} scale={[9, 7, 7]} size={0.65} speed={0.08} opacity={0.13} color="#d5e3f8" />
+
+      <group ref={root}>
+        <HypercubeFrame />
+        {connections.map(({ source, target }) => (
+          <Synapse key={`${source.id}-${target.id}`} source={source} target={target} />
+        ))}
+        {services.map(service => (
+          <WorkloadCell
+            key={service.id}
+            service={service}
+            selected={service.id === selectedId}
+            onSelect={() => onSelect(service.id)}
+          />
+        ))}
+      </group>
+
       <OrbitControls
+        makeDefault
         enablePan={false}
-        minDistance={7}
-        maxDistance={17}
+        enableDamping
+        minDistance={7.5}
+        maxDistance={15}
         autoRotate
-        autoRotateSpeed={0.22}
-        dampingFactor={0.055}
-        minPolarAngle={Math.PI * 0.25}
-        maxPolarAngle={Math.PI * 0.72}
+        autoRotateSpeed={0.32}
+        dampingFactor={0.06}
+        minPolarAngle={Math.PI * 0.2}
+        maxPolarAngle={Math.PI * 0.8}
       />
     </>
   )
 }
 
+function CompatibilityView({ services }: { services: ClusterService[] }) {
+  return (
+    <div className="compatibility-view" role="img" aria-label="Static cluster topology fallback">
+      <svg viewBox="0 0 640 520" aria-hidden="true">
+        <g className="fallback-frame">
+          <path d="M120 110 420 65 545 155 242 205Z M120 110 120 360 242 455 242 205 M242 455 545 390 545 155" />
+          <path d="M190 165 400 130 475 185 268 230Z M190 165 190 325 268 385 268 230 M268 385 475 340 475 185" />
+          <path d="M120 110 190 165 M420 65 400 130 M545 155 475 185 M242 205 268 230 M120 360 190 325 M242 455 268 385 M545 390 475 340" />
+        </g>
+        {services.map((service, index) => {
+          const x = 230 + (service.position[0] + 3) * 45
+          const y = 250 - service.position[1] * 55 + service.position[2] * 12
+          return <circle key={service.id} cx={x} cy={y} r={index === 1 ? 8 : 6} className={`fallback-node fallback-node--${service.status}`} />
+        })}
+      </svg>
+      <div><strong>Compatibility topology</strong><span>WebGL 2 is unavailable in this browser. Enable hardware acceleration for the interactive 3D view.</span></div>
+    </div>
+  )
+}
+
 export default function ClusterScene(props: ClusterSceneProps) {
+  const [contextLost, setContextLost] = useState(false)
+  const webGL2Available = useMemo(() => {
+    try {
+      const canvas = document.createElement('canvas')
+      return Boolean(canvas.getContext('webgl2', { failIfMajorPerformanceCaveat: false }))
+    } catch {
+      return false
+    }
+  }, [])
+
+  if (!webGL2Available || contextLost) {
+    return <CompatibilityView services={props.services} />
+  }
+
   return (
     <Canvas
-      camera={{ position: [0, 0.3, 11], fov: 46 }}
-      dpr={[1, 1.75]}
-      gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+      fallback={<CompatibilityView services={props.services} />}
+      camera={{ position: [6.8, 4.7, 8.6], fov: 43 }}
+      dpr={[1, 1.4]}
+      performance={{ min: 0.55 }}
+      gl={{ antialias: true, alpha: false, powerPreference: 'default' }}
+      onCreated={({ gl }) => {
+        gl.domElement.addEventListener('webglcontextlost', event => {
+          event.preventDefault()
+          setContextLost(true)
+        }, { once: true })
+      }}
       onPointerMissed={() => props.onSelect('api')}
     >
       <SceneContent {...props} />
