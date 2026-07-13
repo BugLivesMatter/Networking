@@ -94,7 +94,7 @@ export default function Dashboard() {
         <section className="hero-copy">
           <div className="eyebrow"><span className="live-dot" /> LIVE DEMO CLUSTER <span className="eyebrow-divider" /> {sourceMode}</div>
           <h1>Your infrastructure,<br /><em>alive.</em></h1>
-          <p>A five-dimensional projection of workloads, replicas and dependencies.<br />Rotate the cluster. Break it. Watch it recover.</p>
+          <p>A three-dimensional cluster of workloads, replicas and dependencies.<br />Rotate the cube. Break it. Watch it recover.</p>
         </section>
 
         <section className="summary-panel glass-panel">

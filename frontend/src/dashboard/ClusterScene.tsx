@@ -26,23 +26,17 @@ const replicaOffsets: Vec3[] = [
   [0.24, 0.16, 0.13],
 ]
 
-function projectHypercubeVertex(index: number): Vec3 {
-  const axis = Array.from({ length: 5 }, (_, bit) => ((index >> bit) & 1) === 1 ? 1 : -1)
-  const [x, y, z, w, v] = axis
-  return [
-    (x * 2.1 + w * 0.62 + v * 0.3) * 0.92,
-    (y * 1.82 + w * 0.42 - v * 0.46) * 0.9,
-    (z * 1.88 - w * 0.52 + v * 0.68) * 0.82,
-  ]
-}
-
-function HypercubeFrame() {
+function ClusterCube() {
   const { edgeGeometry, vertexGeometry } = useMemo(() => {
-    const vertices = Array.from({ length: 32 }, (_, index) => projectHypercubeVertex(index))
+    const vertices: Vec3[] = Array.from({ length: 8 }, (_, index) => [
+      ((index >> 0) & 1) === 1 ? 2.8 : -2.8,
+      ((index >> 1) & 1) === 1 ? 2.8 : -2.8,
+      ((index >> 2) & 1) === 1 ? 2.8 : -2.8,
+    ])
     const edgePositions: number[] = []
 
     for (let vertex = 0; vertex < vertices.length; vertex++) {
-      for (let dimension = 0; dimension < 5; dimension++) {
+      for (let dimension = 0; dimension < 3; dimension++) {
         const neighbour = vertex ^ (1 << dimension)
         if (vertex >= neighbour) continue
         edgePositions.push(...vertices[vertex], ...vertices[neighbour])
@@ -61,12 +55,12 @@ function HypercubeFrame() {
   }, [edgeGeometry, vertexGeometry])
 
   return (
-    <group rotation={[0.04, -0.08, 0.02]}>
+    <group>
       <lineSegments geometry={edgeGeometry}>
-        <lineBasicMaterial color="#8fa3c2" transparent opacity={0.2} depthWrite={false} />
+        <lineBasicMaterial color="#9eb2cf" transparent opacity={0.34} depthWrite={false} />
       </lineSegments>
       <points geometry={vertexGeometry}>
-        <pointsMaterial color="#c7d6ed" size={0.045} transparent opacity={0.46} sizeAttenuation />
+        <pointsMaterial color="#d2e0f5" size={0.065} transparent opacity={0.62} sizeAttenuation />
       </points>
     </group>
   )
@@ -233,7 +227,7 @@ function SceneContent({ services, selectedId, onSelect }: ClusterSceneProps) {
       <Sparkles count={44} scale={[9, 7, 7]} size={0.65} speed={0.08} opacity={0.13} color="#d5e3f8" />
 
       <group ref={root}>
-        <HypercubeFrame />
+        <ClusterCube />
         {connections.map(({ source, target }) => (
           <Synapse key={`${source.id}-${target.id}`} source={source} target={target} />
         ))}
@@ -269,8 +263,6 @@ function CompatibilityView({ services }: { services: ClusterService[] }) {
       <svg viewBox="0 0 640 520" aria-hidden="true">
         <g className="fallback-frame">
           <path d="M120 110 420 65 545 155 242 205Z M120 110 120 360 242 455 242 205 M242 455 545 390 545 155" />
-          <path d="M190 165 400 130 475 185 268 230Z M190 165 190 325 268 385 268 230 M268 385 475 340 475 185" />
-          <path d="M120 110 190 165 M420 65 400 130 M545 155 475 185 M242 205 268 230 M120 360 190 325 M242 455 268 385 M545 390 475 340" />
         </g>
         {services.map((service, index) => {
           const x = 230 + (service.position[0] + 3) * 45
