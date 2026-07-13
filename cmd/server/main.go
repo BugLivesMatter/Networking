@@ -24,6 +24,8 @@ import (
 	categoryhandler "github.com/lab2/rest-api/internal/category/handler"
 	categoryrepo "github.com/lab2/rest-api/internal/category/repository"
 	categorysvc "github.com/lab2/rest-api/internal/category/service"
+	clusterhandler "github.com/lab2/rest-api/internal/cluster/handler"
+	clustersource "github.com/lab2/rest-api/internal/cluster/source"
 	"github.com/lab2/rest-api/internal/config"
 	"github.com/lab2/rest-api/internal/database"
 	"github.com/lab2/rest-api/internal/email"
@@ -183,6 +185,8 @@ func main() {
 	r := gin.New()
 	r.MaxMultipartMemory = cfg.MaxFileSize
 	r.Use(gin.Recovery(), middleware.Recovery())
+	demoCluster := clustersource.NewDemoSource(3800 * time.Millisecond)
+	clusterhandler.New(demoCluster, demoCluster).RegisterRoutes(r)
 	if cfg.AppEnv != "production" {
 		swaggerHandler := ginSwagger.WrapHandler(
 			swaggerfiles.Handler,

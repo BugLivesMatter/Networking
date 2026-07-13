@@ -24,6 +24,10 @@ vendor/
 *.test
 coverage.out
 
+# Frontend
+node_modules/
+dist/
+
 # OS
 .DS_Store
 Thumbs.db
